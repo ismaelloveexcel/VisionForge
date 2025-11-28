@@ -21,9 +21,10 @@ interface Message {
 
 interface HomeProps {
   mode: "development" | "hr";
+  model: string;
 }
 
-export default function Home({ mode }: HomeProps) {
+export default function Home({ mode, model }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState("src/App.tsx");
   const [rightTab, setRightTab] = useState<string>(
@@ -33,8 +34,8 @@ export default function Home({ mode }: HomeProps) {
 
   const chatMutation = useMutation({
     mutationFn: async (newMessages: { role: string; content: string }[]) => {
-      const response = await apiRequest("POST", "/api/chat", { messages: newMessages, mode });
-      return response.json() as Promise<{ content: string }>;
+      const response = await apiRequest("POST", "/api/chat", { messages: newMessages, mode, model });
+      return response.json() as Promise<{ content: string; model?: string }>;
     },
     onSuccess: (data) => {
       const aiMessage: Message = {

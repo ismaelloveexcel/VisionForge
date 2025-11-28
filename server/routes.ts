@@ -2,13 +2,46 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-// This uses Replit's AI Integrations - no API key needed, charges billed to your credits
-const openai = new OpenAI({
+// AI Provider Clients
+// OpenAI - using Replit AI Integrations (no API key needed, billed to credits)
+const openaiClient = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
+
+// Anthropic/Claude - using Replit AI Integrations (no API key needed, billed to credits)
+const anthropicClient = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
+
+// OpenRouter (for DeepSeek, Grok, Llama, etc.) - using Replit AI Integrations
+const openrouterClient = new OpenAI({
+  baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
+  apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
+});
+
+// Available models configuration
+export const AVAILABLE_MODELS = {
+  // OpenAI models
+  "gpt-4o": { provider: "openai", name: "GPT-4o", description: "Most capable OpenAI model" },
+  "gpt-4o-mini": { provider: "openai", name: "GPT-4o Mini", description: "Fast and affordable" },
+  
+  // Anthropic/Claude models
+  "claude-sonnet-4-5": { provider: "anthropic", name: "Claude Sonnet 4.5", description: "Balanced performance" },
+  "claude-haiku-4-5": { provider: "anthropic", name: "Claude Haiku 4.5", description: "Fastest Claude model" },
+  "claude-opus-4-1": { provider: "anthropic", name: "Claude Opus 4.1", description: "Most capable Claude" },
+  
+  // DeepSeek models (via OpenRouter)
+  "deepseek/deepseek-chat-v3.1": { provider: "openrouter", name: "DeepSeek V3.1", description: "Powerful reasoning model" },
+  "deepseek/deepseek-r1-0528": { provider: "openrouter", name: "DeepSeek R1", description: "Advanced reasoning" },
+  
+  // Grok models (via OpenRouter)
+  "x-ai/grok-4.1-fast:free": { provider: "openrouter", name: "Grok 4.1 Fast", description: "Free tier Grok" },
+  "x-ai/grok-3-mini": { provider: "openrouter", name: "Grok 3 Mini", description: "Compact and fast" },
+};
 
 const DEV_SYSTEM_PROMPT = `You are AI-DAN, an autonomous AI development assistant with a nerdy genius persona. You're friendly, enthusiastic about coding, and love to help build things.
 
@@ -51,42 +84,120 @@ Key 2025 updates you know:
 
 When users greet you, respond warmly and ask how you can assist with their HR or labor law questions. Be helpful and accurate.`;
 
+async function chatWithOpenAI(
+  messages: { role: string; content: string }[],
+  model: string,
+  systemPrompt: string
+): Promise<string> {
+  const formattedMessages = [
+    { role: "system" as const, content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+
+  const response = await openaiClient.chat.completions.create({
+    model,
+    messages: formattedMessages,
+    max_completion_tokens: 1024,
+  });
+
+  return response.choices[0]?.message?.content || "I couldn't generate a response.";
+}
+
+async function chatWithAnthropic(
+  messages: { role: string; content: string }[],
+  model: string,
+  systemPrompt: string
+): Promise<string> {
+  const formattedMessages = messages.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  const response = await anthropicClient.messages.create({
+    model,
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: formattedMessages,
+  });
+
+  const content = response.content[0];
+  if (content.type === "text") {
+    return content.text;
+  }
+  return "I couldn't generate a response.";
+}
+
+async function chatWithOpenRouter(
+  messages: { role: string; content: string }[],
+  model: string,
+  systemPrompt: string
+): Promise<string> {
+  const formattedMessages = [
+    { role: "system" as const, content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+
+  const response = await openrouterClient.chat.completions.create({
+    model,
+    messages: formattedMessages,
+    max_tokens: 1024,
+  });
+
+  return response.choices[0]?.message?.content || "I couldn't generate a response.";
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
+  // Get available models
+  app.get("/api/models", (_req, res) => {
+    res.json(AVAILABLE_MODELS);
+  });
+
+  // Chat endpoint with model selection
   app.post("/api/chat", async (req, res) => {
     try {
-      const { messages, mode } = req.body;
+      const { messages, mode, model = "gpt-4o-mini" } = req.body;
       
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ error: "Messages array required" });
       }
 
       const systemPrompt = mode === "hr" ? HR_SYSTEM_PROMPT : DEV_SYSTEM_PROMPT;
+      const modelConfig = AVAILABLE_MODELS[model as keyof typeof AVAILABLE_MODELS];
       
-      const formattedMessages = [
-        { role: "system" as const, content: systemPrompt },
-        ...messages.map((m: { role: string; content: string }) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ];
+      if (!modelConfig) {
+        return res.status(400).json({ error: "Invalid model selected" });
+      }
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: formattedMessages,
-        max_completion_tokens: 1024,
-      });
+      let content: string;
 
-      const content = response.choices[0]?.message?.content || "I'm having trouble responding right now. Please try again.";
+      switch (modelConfig.provider) {
+        case "openai":
+          content = await chatWithOpenAI(messages, model, systemPrompt);
+          break;
+        case "anthropic":
+          content = await chatWithAnthropic(messages, model, systemPrompt);
+          break;
+        case "openrouter":
+          content = await chatWithOpenRouter(messages, model, systemPrompt);
+          break;
+        default:
+          content = await chatWithOpenAI(messages, "gpt-4o-mini", systemPrompt);
+      }
       
-      res.json({ content });
+      res.json({ content, model });
     } catch (error: any) {
       console.error("Chat API error:", error?.message || error);
       
-      // Handle rate limiting gracefully
       if (error?.message?.includes("429") || error?.message?.includes("rate")) {
         return res.json({ 
           content: "I'm a bit busy right now - give me a moment and try again!" 

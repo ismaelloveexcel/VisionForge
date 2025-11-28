@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ModeSwitcher } from "@/components/ModeSwitcher";
+import { ModelSelector } from "@/components/ModelSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Home from "@/pages/Home";
 import Projects from "@/pages/Projects";
@@ -16,11 +17,16 @@ import History from "@/pages/History";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
-function Router({ mode }: { mode: "development" | "hr" }) {
+interface RouterProps {
+  mode: "development" | "hr";
+  model: string;
+}
+
+function Router({ mode, model }: RouterProps) {
   return (
     <Switch>
       <Route path="/">
-        <Home mode={mode} />
+        <Home mode={mode} model={model} />
       </Route>
       <Route path="/projects" component={Projects} />
       <Route path="/templates" component={Templates} />
@@ -35,6 +41,7 @@ function Router({ mode }: { mode: "development" | "hr" }) {
 
 function App() {
   const [mode, setMode] = useState<"development" | "hr">("development");
+  const [model, setModel] = useState("gpt-4o-mini");
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -53,14 +60,15 @@ function App() {
             <AppSidebar mode={mode} />
             <div className="flex flex-1 flex-col min-w-0">
               <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-border shrink-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
                   <ModeSwitcher mode={mode} onModeChange={setMode} />
+                  <ModelSelector value={model} onChange={setModel} />
                 </div>
                 <ThemeToggle />
               </header>
               <main className="flex-1 overflow-hidden">
-                <Router mode={mode} />
+                <Router mode={mode} model={model} />
               </main>
             </div>
           </div>
