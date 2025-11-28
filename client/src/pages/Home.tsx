@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { WelcomeCard } from "@/components/WelcomeCard";
@@ -23,12 +25,42 @@ interface HomeProps {
 
 export default function Home({ mode }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState("src/App.tsx");
   const [rightTab, setRightTab] = useState<string>(
     mode === "development" ? "code" : "tools"
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const chatMutation = useMutation({
+    mutationFn: async (newMessages: { role: string; content: string }[]) => {
+      const response = await apiRequest("POST", "/api/chat", { messages: newMessages, mode });
+      return response.json() as Promise<{ content: string }>;
+    },
+    onSuccess: (data) => {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.content,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    },
+    onError: () => {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Oops! I ran into a hiccup. Could you try asking me again?",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    },
+  });
 
   useEffect(() => {
     setRightTab(mode === "development" ? "code" : "tools");
@@ -38,7 +70,7 @@ export default function Home({ mode }: HomeProps) {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, chatMutation.isPending]);
 
   const handleSend = (content: string) => {
     const userMessage: Message = {
@@ -51,26 +83,12 @@ export default function Home({ mode }: HomeProps) {
       }),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setIsTyping(true);
 
-    setTimeout(() => {
-      const response =
-        mode === "development"
-          ? "Great idea! I'll analyze your requirements and start building. Let me create the project structure and set up the necessary files. I'll push everything to GitHub once ready."
-          : "I understand your HR query. Based on UAE Federal Decree-Law No. 33/2021 and the latest 2025 amendments, let me provide you with accurate guidance on this matter.";
-
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsTyping(false);
-    }, 1500);
+    const allMessages = [
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content },
+    ];
+    chatMutation.mutate(allMessages);
   };
 
   const handleQuickAction = (prompt: string) => {
@@ -192,7 +210,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                 />
               ))
             )}
-            {isTyping && (
+            {chatMutation.isPending && (
               <ChatMessage role="assistant" content="" isTyping />
             )}
           </div>
@@ -200,7 +218,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
         <div className="pt-4 border-t border-border">
           <ChatInput
             onSend={handleSend}
-            isLoading={isTyping}
+            isLoading={chatMutation.isPending}
             placeholder={
               mode === "development"
                 ? "Describe your app idea or ask AI-DAN to build something..."
