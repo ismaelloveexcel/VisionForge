@@ -124,46 +124,92 @@ Preferred communication style: Simple, everyday language.
 
 ---
 
-## VS Code Extension (vscode-aidan/)
+## VS Code Extension v2.0 (vscode-aidan/)
 
-A separate standalone VS Code extension project that provides autonomous AI capabilities.
+A comprehensive AI development partner VS Code extension that goes beyond simple code generation.
+
+### What's New in v2.0
+
+- **Project Vision Planning**: Creates comprehensive project plans with architecture, milestones, risks, and timelines
+- **Persistent Memory**: Remembers your projects, preferences, and patterns across sessions
+- **Learning Engine**: Adapts to your coding style, naming conventions, and framework preferences
+- **Smart Git**: AI-generated commit messages, branch suggestions, and PR descriptions
+- **Test Generation**: Auto-generates Jest/Mocha/Vitest tests for your code
+- **Code Review**: Security checks, best practices, and quality scoring before commits
+- **Refactoring Tools**: Multi-file rename, dead code detection, import path updates
+- **Error Recovery**: Parses errors and suggests fixes automatically
+- **Resource Finder**: Find npm packages, free assets, and APIs for your project
+- **Progress Tracking**: Burndown charts, completion estimates, productivity metrics
+- **Deployment Guides**: Step-by-step deployment to Vercel, Netlify, Railway, Heroku
+- **Project Templates**: Start fast with React, Three.js VR, Express API, Unity, Electron starters
 
 ### Extension Architecture
 
 **Core Files**:
-- `extension.ts` - Main entry point, registers commands and providers
+- `extension.ts` - Main entry point, registers 17+ commands and providers
 - `aiService.ts` - Multi-model AI integration (OpenAI, Anthropic, OpenRouter)
 - `fileOperations.ts` - File system operations (read, create, edit, delete)
 - `terminalOperations.ts` - Terminal command execution
 - `agentExecutor.ts` - Parses AI responses and executes actions
-- `chatViewProvider.ts` - Webview panel for chat interface
+- `chatViewProvider.ts` - Webview panel with tabbed interface (Chat/Vision/Progress/Templates)
 - `unityMcp.ts` - Unity MCP bridge for game engine integration
 
+**Enhancement Modules** (New in v2.0):
+- `visionPlanner.ts` - Project planning and health analysis
+- `projectTemplates.ts` - Pre-built project starters
+- `memoryManager.ts` - Persistent preferences and pattern storage
+- `learningEngine.ts` - Code style analysis and adaptation
+- `gitOperations.ts` - Smart Git operations with AI suggestions
+- `testGenerator.ts` - Automated test generation
+- `refactorEngine.ts` - Code refactoring tools
+- `errorRecovery.ts` - Error parsing and fix suggestions
+- `resourceFinder.ts` - Package, asset, and API discovery
+- `progressTracker.ts` - Project progress metrics
+- `codeReview.ts` - Pre-commit quality checks
+- `deploymentHelper.ts` - Deployment configuration generation
+
 **Features**:
-- Sidebar chat interface with model selector
+- Tabbed sidebar interface (Chat, Vision, Progress, Templates)
 - Autonomous file operations via XML action tags
 - Terminal command execution
-- Workspace context scanning
+- Workspace context scanning with pattern learning
 - Unity/Unreal integration via MCP protocol
 - Multi-model support: GPT-4o, Claude Sonnet/Opus, DeepSeek, Grok
+- Persistent memory across sessions
+- Quick actions dashboard
 
 **Build Instructions**:
 ```bash
 cd vscode-aidan
 npm install
-npm run compile
 npm run package
-# Install: code --install-extension aidan-vscode-1.0.0.vsix
+# Install: code --install-extension aidan-vscode-2.0.0.vsix
 ```
 
 **Settings**:
 - `aidan.defaultModel` - Default AI model
 - `aidan.autoExecute` - Auto-execute actions without confirmation
+- `aidan.learnFromCode` - Learn coding patterns (default: true)
+- `aidan.adaptCodeStyle` - Match your code style (default: true)
+- `aidan.autoReview` - Review before commits (default: false)
 - `aidan.unityMcpEnabled` - Enable Unity MCP integration
 - `aidan.unityMcpPort` - Unity MCP server port
 
-**Commands**:
+**Commands** (17 total):
 - `AI-DAN: Open Chat` (Ctrl+Shift+A)
+- `AI-DAN: Plan Project` (Ctrl+Shift+P)
+- `AI-DAN: Smart Git Commit` (Ctrl+Shift+G)
+- `AI-DAN: Generate Tests` (Ctrl+Shift+T)
+- `AI-DAN: Code Review` (Ctrl+Shift+R)
+- `AI-DAN: Use Template`
+- `AI-DAN: Analyze Health`
+- `AI-DAN: Refactoring Tools`
+- `AI-DAN: Find Resources`
+- `AI-DAN: Deployment Guide`
+- `AI-DAN: Show Progress`
+- `AI-DAN: View/Manage Memory`
+- `AI-DAN: Recover from Error`
 - `AI-DAN: Set API Key`
 - `AI-DAN: Scan Workspace`
+- `AI-DAN: Execute Action`
 - `AI-DAN: Check Unity Connection`
