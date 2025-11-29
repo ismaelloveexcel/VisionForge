@@ -13,10 +13,13 @@ export interface AIResponse {
 }
 
 export interface ParsedAction {
-    type: 'create_file' | 'edit_file' | 'delete_file' | 'run_command' | 'read_file';
+    type: 'create_file' | 'edit_file' | 'delete_file' | 'run_command' | 'read_file' | 'unity_create_object' | 'unity_add_component' | 'unity_create_script' | 'unity_run_menu';
     path?: string;
     content?: string;
     command?: string;
+    objectName?: string;
+    componentType?: string;
+    menuItem?: string;
     description: string;
 }
 
@@ -28,6 +31,12 @@ You have the ability to:
 3. DELETE files: Use <delete_file path="path/to/file"/>
 4. RUN commands: Use <run_command>npm install express</run_command>
 5. READ files: Use <read_file path="path/to/file"/>
+
+UNITY INTEGRATION (when user is working on Unity projects):
+6. CREATE GameObject: Use <unity_create_object name="ObjectName"/>
+7. ADD Component: Use <unity_add_component object="ObjectName" component="Rigidbody"/>
+8. CREATE Unity Script: Use <unity_create_script path="Assets/Scripts/MyScript.cs">script content</unity_create_script>
+9. RUN Menu Item: Use <unity_run_menu item="GameObject/Create Empty"/>
 
 When the user asks you to build something:
 1. Think through the structure needed
@@ -55,6 +64,30 @@ app.listen(3000, () => {
 <run_command>npm init -y && npm install express</run_command>
 
 Done! Your server is ready. Run \`node server.js\` to start it."
+
+Example response when asked to create a Unity player controller:
+"I'll create a player controller for Unity!
+
+<unity_create_script path="Assets/Scripts/PlayerController.cs">
+using UnityEngine;
+
+public class PlayerController : MonoBehaviour
+{
+    public float moveSpeed = 5f;
+    
+    void Update()
+    {
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+        transform.Translate(new Vector3(h, 0, v) * moveSpeed * Time.deltaTime);
+    }
+}
+</unity_create_script>
+
+<unity_create_object name="Player"/>
+<unity_add_component object="Player" component="PlayerController"/>
+
+Done! I've created the script and attached it to a new Player object."
 
 Be helpful, nerdy, and actually execute the actions - don't just describe them!`;
 
@@ -240,6 +273,44 @@ export class AIService {
                 type: 'read_file',
                 path: match[1],
                 description: `Read file: ${match[1]}`
+            });
+        }
+
+        const unityCreateObjectRegex = /<unity_create_object\s+name="([^"]+)"\s*\/>/g;
+        while ((match = unityCreateObjectRegex.exec(content)) !== null) {
+            actions.push({
+                type: 'unity_create_object',
+                objectName: match[1],
+                description: `Unity: Create GameObject "${match[1]}"`
+            });
+        }
+
+        const unityAddComponentRegex = /<unity_add_component\s+object="([^"]+)"\s+component="([^"]+)"\s*\/>/g;
+        while ((match = unityAddComponentRegex.exec(content)) !== null) {
+            actions.push({
+                type: 'unity_add_component',
+                objectName: match[1],
+                componentType: match[2],
+                description: `Unity: Add ${match[2]} to "${match[1]}"`
+            });
+        }
+
+        const unityCreateScriptRegex = /<unity_create_script\s+path="([^"]+)">([\s\S]*?)<\/unity_create_script>/g;
+        while ((match = unityCreateScriptRegex.exec(content)) !== null) {
+            actions.push({
+                type: 'unity_create_script',
+                path: match[1],
+                content: match[2].trim(),
+                description: `Unity: Create script "${match[1]}"`
+            });
+        }
+
+        const unityRunMenuRegex = /<unity_run_menu\s+item="([^"]+)"\s*\/>/g;
+        while ((match = unityRunMenuRegex.exec(content)) !== null) {
+            actions.push({
+                type: 'unity_run_menu',
+                menuItem: match[1],
+                description: `Unity: Run menu "${match[1]}"`
             });
         }
 

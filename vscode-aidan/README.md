@@ -77,7 +77,20 @@ To control Unity directly from AI-DAN:
 1. Install [Unity MCP Plugin](https://github.com/CoplayDev/unity-mcp) in your Unity project
 2. Enable in VS Code: Set `aidan.unityMcpEnabled` to `true`
 3. Start the MCP server in Unity
-4. Now you can say things like "Create a cube with a Rigidbody"
+4. Run "AI-DAN: Check Unity Connection" to verify connection
+5. Now you can say things like "Create a player with a Rigidbody and movement script"
+
+### Unity Commands
+When working with Unity, AI-DAN can:
+- Create GameObjects in your scene
+- Add components to objects
+- Generate C# scripts and place them in your Assets folder
+- Run Unity menu items
+
+Example prompts:
+- "Create a player controller with WASD movement"
+- "Add a Rigidbody and BoxCollider to the Player object"
+- "Create an enemy AI script that follows the player"
 
 ## Keyboard Shortcuts
 

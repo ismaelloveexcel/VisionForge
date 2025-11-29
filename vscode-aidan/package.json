@@ -60,6 +60,10 @@
       {
         "command": "aidan.setApiKey",
         "title": "AI-DAN: Set API Key"
+      },
+      {
+        "command": "aidan.checkUnityConnection",
+        "title": "AI-DAN: Check Unity Connection"
       }
     ],
     "configuration": {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { AIService } from './aiService';
 import { FileOperations } from './fileOperations';
 import { TerminalOperations } from './terminalOperations';
+import { UnityMcpBridge } from './unityMcp';
 import { AgentExecutor } from './agentExecutor';
 import { ChatViewProvider } from './chatViewProvider';
 
@@ -13,7 +14,8 @@ export function activate(context: vscode.ExtensionContext) {
     const aiService = new AIService();
     const fileOps = new FileOperations();
     const terminalOps = new TerminalOperations();
-    const agentExecutor = new AgentExecutor(fileOps, terminalOps);
+    const unityBridge = new UnityMcpBridge();
+    const agentExecutor = new AgentExecutor(fileOps, terminalOps, unityBridge);
 
     chatViewProvider = new ChatViewProvider(
         context.extensionUri,
@@ -81,6 +83,27 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('aidan.checkUnityConnection', async () => {
+            const connected = await agentExecutor.checkUnityConnection();
+            if (connected) {
+                vscode.window.showInformationMessage('Unity MCP connection successful!');
+            } else {
+                vscode.window.showWarningMessage(
+                    'Unity MCP not connected. Make sure Unity is running with the MCP plugin and the port matches your settings.'
+                );
+            }
+        })
+    );
+
+    if (unityBridge.isEnabled()) {
+        unityBridge.checkConnection().then(connected => {
+            if (connected) {
+                vscode.window.showInformationMessage('AI-DAN connected to Unity!');
+            }
+        });
+    }
 
     vscode.window.showInformationMessage('AI-DAN is ready! Press Ctrl+Shift+A to open chat.');
 }

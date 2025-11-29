@@ -466,7 +466,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 .replace(/<edit_file[^>]*>[\\s\\S]*?<\\/edit_file>/g, '')
                 .replace(/<delete_file[^>]*\\/>/g, '')
                 .replace(/<run_command>[\\s\\S]*?<\\/run_command>/g, '')
-                .replace(/<read_file[^>]*\\/>/g, '');
+                .replace(/<read_file[^>]*\\/>/g, '')
+                .replace(/<unity_create_object[^>]*\\/>/g, '')
+                .replace(/<unity_add_component[^>]*\\/>/g, '')
+                .replace(/<unity_create_script[^>]*>[\\s\\S]*?<\\/unity_create_script>/g, '')
+                .replace(/<unity_run_menu[^>]*\\/>/g, '');
 
             let actionsHtml = '';
             if (actions && actions.length > 0) {
@@ -542,7 +546,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     addMessage('assistant', 'Workspace scanned! I now have context about your project structure.');
                     break;
                 case 'actionsExecuted':
-                    addMessage('assistant', 'Actions completed: ' + data.summary);
+                    let resultDetails = data.results.map(r => 
+                        (r.success ? '[OK] ' : '[FAIL] ') + r.message
+                    ).join('<br>');
+                    addMessage('assistant', 'Actions completed: ' + data.summary + '<br><br>' + resultDetails);
                     break;
             }
         });

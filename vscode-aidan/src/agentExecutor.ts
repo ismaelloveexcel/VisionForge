@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { FileOperations } from './fileOperations';
 import { TerminalOperations } from './terminalOperations';
+import { UnityMcpBridge } from './unityMcp';
 import { ParsedAction } from './aiService';
 
 export interface ExecutionResult {
@@ -13,7 +14,8 @@ export interface ExecutionResult {
 export class AgentExecutor {
     constructor(
         private fileOps: FileOperations,
-        private terminalOps: TerminalOperations
+        private terminalOps: TerminalOperations,
+        private unityBridge: UnityMcpBridge
     ) {}
 
     async executeActions(actions: ParsedAction[], autoExecute: boolean = false): Promise<ExecutionResult[]> {
@@ -120,8 +122,64 @@ export class AgentExecutor {
                         output: content
                     };
 
+                case 'unity_create_object':
+                    if (!action.objectName) {
+                        throw new Error('Object name required for unity_create_object');
+                    }
+                    if (!this.unityBridge.isEnabled()) {
+                        throw new Error('Unity MCP is not enabled. Enable it in settings.');
+                    }
+                    const createResult = await this.unityBridge.createGameObject(action.objectName);
+                    return {
+                        success: createResult.success,
+                        action,
+                        message: createResult.message
+                    };
+
+                case 'unity_add_component':
+                    if (!action.objectName || !action.componentType) {
+                        throw new Error('Object name and component type required');
+                    }
+                    if (!this.unityBridge.isEnabled()) {
+                        throw new Error('Unity MCP is not enabled. Enable it in settings.');
+                    }
+                    const addResult = await this.unityBridge.addComponent(action.objectName, action.componentType);
+                    return {
+                        success: addResult.success,
+                        action,
+                        message: addResult.message
+                    };
+
+                case 'unity_create_script':
+                    if (!action.path || action.content === undefined) {
+                        throw new Error('Path and content required for unity_create_script');
+                    }
+                    if (!this.unityBridge.isEnabled()) {
+                        throw new Error('Unity MCP is not enabled. Enable it in settings.');
+                    }
+                    const scriptResult = await this.unityBridge.createScript(action.path, action.content);
+                    return {
+                        success: scriptResult.success,
+                        action,
+                        message: scriptResult.message
+                    };
+
+                case 'unity_run_menu':
+                    if (!action.menuItem) {
+                        throw new Error('Menu item required for unity_run_menu');
+                    }
+                    if (!this.unityBridge.isEnabled()) {
+                        throw new Error('Unity MCP is not enabled. Enable it in settings.');
+                    }
+                    const menuResult = await this.unityBridge.runMenuItem(action.menuItem);
+                    return {
+                        success: menuResult.success,
+                        action,
+                        message: menuResult.message
+                    };
+
                 default:
-                    throw new Error(`Unknown action type: ${action.type}`);
+                    throw new Error(`Unknown action type: ${(action as any).type}`);
             }
         } catch (error: any) {
             return {
@@ -142,5 +200,9 @@ export class AgentExecutor {
         const failed = results.filter(r => !r.success).length;
 
         return { success, failed, results };
+    }
+
+    async checkUnityConnection(): Promise<boolean> {
+        return this.unityBridge.checkConnection();
     }
 }
