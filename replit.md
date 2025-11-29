@@ -121,3 +121,49 @@ Preferred communication style: Simple, everyday language.
 - Production build creates `dist/` directory with bundled server and static client
 - Static file serving from `dist/public`
 - SPA fallback routing for client-side navigation
+
+---
+
+## VS Code Extension (vscode-aidan/)
+
+A separate standalone VS Code extension project that provides autonomous AI capabilities.
+
+### Extension Architecture
+
+**Core Files**:
+- `extension.ts` - Main entry point, registers commands and providers
+- `aiService.ts` - Multi-model AI integration (OpenAI, Anthropic, OpenRouter)
+- `fileOperations.ts` - File system operations (read, create, edit, delete)
+- `terminalOperations.ts` - Terminal command execution
+- `agentExecutor.ts` - Parses AI responses and executes actions
+- `chatViewProvider.ts` - Webview panel for chat interface
+- `unityMcp.ts` - Unity MCP bridge for game engine integration
+
+**Features**:
+- Sidebar chat interface with model selector
+- Autonomous file operations via XML action tags
+- Terminal command execution
+- Workspace context scanning
+- Unity/Unreal integration via MCP protocol
+- Multi-model support: GPT-4o, Claude Sonnet/Opus, DeepSeek, Grok
+
+**Build Instructions**:
+```bash
+cd vscode-aidan
+npm install
+npm run compile
+npm run package
+# Install: code --install-extension aidan-vscode-1.0.0.vsix
+```
+
+**Settings**:
+- `aidan.defaultModel` - Default AI model
+- `aidan.autoExecute` - Auto-execute actions without confirmation
+- `aidan.unityMcpEnabled` - Enable Unity MCP integration
+- `aidan.unityMcpPort` - Unity MCP server port
+
+**Commands**:
+- `AI-DAN: Open Chat` (Ctrl+Shift+A)
+- `AI-DAN: Set API Key`
+- `AI-DAN: Scan Workspace`
+- `AI-DAN: Check Unity Connection`
