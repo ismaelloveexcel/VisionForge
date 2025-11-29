@@ -1,0 +1,138 @@
+{
+  "name": "aidan-vscode",
+  "displayName": "AI-DAN - Autonomous Development Assistant",
+  "description": "An autonomous AI agent that can read, write files, execute commands, and integrate with Unity/Unreal",
+  "version": "1.0.0",
+  "publisher": "aidan",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "autonomous",
+    "agent",
+    "unity",
+    "unreal",
+    "game-development"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aidan-sidebar",
+          "title": "AI-DAN",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "aidan-sidebar": [
+        {
+          "type": "webview",
+          "id": "aidan.chatView",
+          "name": "AI-DAN Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aidan.openChat",
+        "title": "AI-DAN: Open Chat"
+      },
+      {
+        "command": "aidan.executeAction",
+        "title": "AI-DAN: Execute Action"
+      },
+      {
+        "command": "aidan.scanWorkspace",
+        "title": "AI-DAN: Scan Workspace"
+      },
+      {
+        "command": "aidan.setApiKey",
+        "title": "AI-DAN: Set API Key"
+      }
+    ],
+    "configuration": {
+      "title": "AI-DAN",
+      "properties": {
+        "aidan.defaultModel": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "enum": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "claude-sonnet-4-5",
+            "claude-haiku-4-5",
+            "claude-opus-4-1",
+            "deepseek-chat",
+            "grok-4"
+          ],
+          "description": "Default AI model to use"
+        },
+        "aidan.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key"
+        },
+        "aidan.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API Key"
+        },
+        "aidan.openrouterApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenRouter API Key (for DeepSeek, Grok)"
+        },
+        "aidan.autoExecute": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically execute file/terminal actions without confirmation"
+        },
+        "aidan.unityMcpEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Unity MCP integration"
+        },
+        "aidan.unityMcpPort": {
+          "type": "number",
+          "default": 8080,
+          "description": "Unity MCP server port"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "aidan.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "openai": "^4.20.0",
+    "@anthropic-ai/sdk": "^0.32.0"
+  }
+}
