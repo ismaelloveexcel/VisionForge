@@ -10,13 +10,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HRCalculator } from "@/components/HRCalculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Code2, FileText, Activity } from "lucide-react";
+import { Code2, FileText, Activity, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  modelName?: string;
 }
 
 interface HomeProps {
@@ -38,6 +40,17 @@ export default function Home({ mode, model }: HomeProps) {
       return response.json() as Promise<{ content: string; model?: string }>;
     },
     onSuccess: (data) => {
+      const modelDisplayNames: Record<string, string> = {
+        "gpt-4o": "GPT-4o",
+        "gpt-4o-mini": "GPT-4o Mini",
+        "claude-sonnet-4-5": "Claude Sonnet",
+        "claude-haiku-4-5": "Claude Haiku",
+        "claude-opus-4-1": "Claude Opus",
+        "deepseek/deepseek-chat-v3.1": "DeepSeek V3.1",
+        "deepseek/deepseek-r1-0528": "DeepSeek R1",
+        "x-ai/grok-4.1-fast:free": "Grok 4.1",
+        "x-ai/grok-3-mini": "Grok 3 Mini",
+      };
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -46,6 +59,7 @@ export default function Home({ mode, model }: HomeProps) {
           hour: "2-digit",
           minute: "2-digit",
         }),
+        modelName: modelDisplayNames[data.model || model] || model,
       };
       setMessages((prev) => [...prev, aiMessage]);
     },
@@ -208,6 +222,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                   role={msg.role}
                   content={msg.content}
                   timestamp={msg.timestamp}
+                  modelName={msg.modelName}
                 />
               ))
             )}
@@ -216,7 +231,21 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
             )}
           </div>
         </ScrollArea>
-        <div className="pt-4 border-t border-border">
+        <div className="pt-4 border-t border-border flex flex-col gap-2">
+          {messages.length > 0 && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground gap-1.5"
+                onClick={() => setMessages([])}
+                data-testid="button-clear-chat"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear chat
+              </Button>
+            </div>
+          )}
           <ChatInput
             onSend={handleSend}
             isLoading={chatMutation.isPending}
