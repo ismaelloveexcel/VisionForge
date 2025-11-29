@@ -1,0 +1,124 @@
+Build Scripts
+build.sh (Unix/Linux/Mac):
+
+bash
+#!/bin/bash
+
+echo "Building AI-DAN VS Code Extension..."
+
+# Install dependencies
+npm install
+
+# Compile TypeScript
+npm run compile
+
+# Package extension
+npm run package
+
+echo ""
+echo "Build complete!"
+echo "Install with: code --install-extension aidan-vscode-1.0.0.vsix"
+build.ps1 (Windows PowerShell):
+
+powershell
+# Build script for Windows PowerShell
+Write-Host "Building AI-DAN VS Code Extension..." -ForegroundColor Green
+
+# Install dependencies
+npm install
+
+# Compile TypeScript
+npm run compile
+
+# Package extension
+npm run package
+
+Write-Host ""
+Write-Host "Build complete!" -ForegroundColor Green
+Write-Host "Install with: code --install-extension aidan-vscode-1.0.0.vsix" -ForegroundColor Yellow
+Additional Files Needed
+CHANGELOG.md:
+
+markdown
+# Change Log
+
+## [1.0.0] - 2024-01-01
+
+### Added
+- Multi-model AI support (OpenAI, Anthropic, OpenRouter)
+- Autonomous file operations
+- Terminal command execution
+- Unity MCP integration
+- Workspace scanning and context
+- Interactive chat interface
+LICENSE:
+
+text
+MIT License
+
+Copyright (c) 2024 AI-DAN
+
+Permission is hereby granted...
+Setup Instructions
+Install Dependencies:
+
+bash
+cd vscode-aidan
+npm install
+Build Extension:
+
+bash
+# Unix/Linux/Mac
+chmod +x build.sh
+./build.sh
+
+# Windows
+.\build.ps1
+Install Extension:
+
+bash
+code --install-extension aidan-vscode-1.0.0.vsix
+Usage Guide
+Set API Keys:
+
+Press Ctrl+Shift+P → "AI-DAN: Set API Key"
+
+Choose your preferred AI provider
+
+Enter your API key
+
+Open Chat:
+
+Press Ctrl+Shift+A or click the AI-DAN icon in the activity bar
+
+Try Commands:
+
+"Create a simple Express server"
+
+"Make a React component called Button"
+
+"Scan my workspace and suggest improvements"
+
+Key Features Demonstrated
+Multi-Model AI: Supports GPT-4o, Claude, DeepSeek, Grok
+
+Autonomous Actions: Creates files, runs commands automatically
+
+Workspace Integration: Scans project structure for context
+
+Unity Support: Direct integration with Unity Editor via MCP
+
+Safety Controls: Action confirmation before execution
+
+Potential Enhancements
+Error Handling: Add more robust error handling for API failures
+
+Progress Indicators: Show progress for long-running operations
+
+Template System: Pre-built templates for common project types
+
+Plugin System: Allow extending action types
+
+Batch Operations: Better handling of multiple file operations
+
+This is a very sophisticated extension that could significantly boost developer productivity! The architecture is well-designed with clear separation of concerns between the AI service, file operations, terminal operations, and the execution engine.
