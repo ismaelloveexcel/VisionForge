@@ -1,8 +1,8 @@
 {
   "name": "aidan-vscode",
-  "displayName": "AI-DAN - Autonomous Development Assistant",
-  "description": "An autonomous AI agent that can read, write files, execute commands, and integrate with Unity/Unreal",
-  "version": "1.0.0",
+  "displayName": "AI-DAN - Autonomous Development Partner",
+  "description": "A comprehensive AI development partner that plans, codes, tests, reviews, and deploys. Features project vision planning, memory across sessions, learning your coding style, Git automation, test generation, code review, and deployment assistance.",
+  "version": "2.0.0",
   "publisher": "aidan",
   "engines": {
     "vscode": "^1.85.0"
@@ -10,6 +10,8 @@
   "categories": [
     "Programming Languages",
     "Machine Learning",
+    "Testing",
+    "Linters",
     "Other"
   ],
   "keywords": [
@@ -19,7 +21,12 @@
     "agent",
     "unity",
     "unreal",
-    "game-development"
+    "game-development",
+    "project-planning",
+    "code-review",
+    "testing",
+    "deployment",
+    "git"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -47,23 +54,88 @@
     "commands": [
       {
         "command": "aidan.openChat",
-        "title": "AI-DAN: Open Chat"
+        "title": "AI-DAN: Open Chat",
+        "category": "AI-DAN"
       },
       {
         "command": "aidan.executeAction",
-        "title": "AI-DAN: Execute Action"
+        "title": "AI-DAN: Execute Action",
+        "category": "AI-DAN"
       },
       {
         "command": "aidan.scanWorkspace",
-        "title": "AI-DAN: Scan Workspace"
+        "title": "AI-DAN: Scan Workspace & Learn Patterns",
+        "category": "AI-DAN"
       },
       {
         "command": "aidan.setApiKey",
-        "title": "AI-DAN: Set API Key"
+        "title": "AI-DAN: Set API Key",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.planProject",
+        "title": "AI-DAN: Plan Project (Create Vision)",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.useTemplate",
+        "title": "AI-DAN: Use Project Template",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.analyzeHealth",
+        "title": "AI-DAN: Analyze Project Health",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.gitCommit",
+        "title": "AI-DAN: Smart Git Commit",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.generateTests",
+        "title": "AI-DAN: Generate Tests for Current File",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.refactor",
+        "title": "AI-DAN: Refactoring Tools",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.reviewCode",
+        "title": "AI-DAN: Code Review",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.findResources",
+        "title": "AI-DAN: Find Resources (Packages, Assets, APIs)",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.deploy",
+        "title": "AI-DAN: Deployment Guide",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.showProgress",
+        "title": "AI-DAN: Show Project Progress",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.viewMemory",
+        "title": "AI-DAN: View/Manage Memory",
+        "category": "AI-DAN"
+      },
+      {
+        "command": "aidan.recoverError",
+        "title": "AI-DAN: Recover from Error",
+        "category": "AI-DAN"
       },
       {
         "command": "aidan.checkUnityConnection",
-        "title": "AI-DAN: Check Unity Connection"
+        "title": "AI-DAN: Check Unity Connection",
+        "category": "AI-DAN"
       }
     ],
     "configuration": {
@@ -103,6 +175,21 @@
           "default": false,
           "description": "Automatically execute file/terminal actions without confirmation"
         },
+        "aidan.learnFromCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Learn coding patterns and preferences from your codebase"
+        },
+        "aidan.adaptCodeStyle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Adapt generated code to match your coding style"
+        },
+        "aidan.autoReview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically review code before git commits"
+        },
         "aidan.unityMcpEnabled": {
           "type": "boolean",
           "default": false,
@@ -120,14 +207,61 @@
         "command": "aidan.openChat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a"
+      },
+      {
+        "command": "aidan.planProject",
+        "key": "ctrl+shift+p",
+        "mac": "cmd+shift+p",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "aidan.gitCommit",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      },
+      {
+        "command": "aidan.generateTests",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t"
+      },
+      {
+        "command": "aidan.reviewCode",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aidan.generateTests",
+          "group": "AI-DAN",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "aidan.reviewCode",
+          "group": "AI-DAN",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "aidan.refactor",
+          "group": "AI-DAN",
+          "when": "editorTextFocus"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "aidan.generateTests",
+          "group": "AI-DAN"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package --no-dependencies"
+    "package": "npm run compile && vsce package --no-dependencies",
+    "clean": "rm -rf out *.vsix"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

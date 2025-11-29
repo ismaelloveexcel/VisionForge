@@ -2,18 +2,43 @@ import * as vscode from 'vscode';
 import { AIService, Message, ParsedAction } from './aiService';
 import { AgentExecutor, ExecutionResult } from './agentExecutor';
 import { FileOperations } from './fileOperations';
+import { VisionPlanner } from './visionPlanner';
+import { ProjectTemplateManager } from './projectTemplates';
+import { MemoryManager } from './memoryManager';
+import { LearningEngine } from './learningEngine';
+import { GitOperations } from './gitOperations';
+import { TestGenerator } from './testGenerator';
+import { RefactorEngine } from './refactorEngine';
+import { ErrorRecovery } from './errorRecovery';
+import { ResourceFinder } from './resourceFinder';
+import { ProgressTracker } from './progressTracker';
+import { CodeReview } from './codeReview';
+import { DeploymentHelper } from './deploymentHelper';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private messages: Message[] = [];
     private workspaceContext: string = '';
     private currentModel: string = 'gpt-4o-mini';
+    private currentTab: 'chat' | 'vision' | 'progress' | 'templates' = 'chat';
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly aiService: AIService,
         private readonly agentExecutor: AgentExecutor,
-        private readonly fileOps: FileOperations
+        private readonly fileOps: FileOperations,
+        private readonly visionPlanner?: VisionPlanner,
+        private readonly templateManager?: ProjectTemplateManager,
+        private readonly memoryManager?: MemoryManager,
+        private readonly learningEngine?: LearningEngine,
+        private readonly gitOps?: GitOperations,
+        private readonly testGenerator?: TestGenerator,
+        private readonly refactorEngine?: RefactorEngine,
+        private readonly errorRecovery?: ErrorRecovery,
+        private readonly resourceFinder?: ResourceFinder,
+        private readonly progressTracker?: ProgressTracker,
+        private readonly codeReview?: CodeReview,
+        private readonly deploymentHelper?: DeploymentHelper
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -43,10 +68,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'scanWorkspace':
                     this.workspaceContext = await this.fileOps.getWorkspaceStructure();
+                    if (this.learningEngine) {
+                        await this.learningEngine.analyzeWorkspace();
+                    }
                     this.postMessage({ 
                         type: 'workspaceScanned',
                         structure: this.workspaceContext 
                     });
+                    break;
+                case 'changeTab':
+                    this.currentTab = data.tab;
+                    this.updateTabContent();
+                    break;
+                case 'planProject':
+                    await this.handlePlanProject(data.description);
+                    break;
+                case 'applyTemplate':
+                    await this.handleApplyTemplate(data.templateId);
+                    break;
+                case 'gitCommit':
+                    await this.handleGitCommit();
+                    break;
+                case 'generateTests':
+                    await this.handleGenerateTests();
+                    break;
+                case 'reviewCode':
+                    await this.handleCodeReview();
                     break;
             }
         });
@@ -67,10 +114,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.postMessage({ type: 'thinking', isThinking: true });
 
         try {
+            let contextAddition = '';
+            if (this.memoryManager) {
+                contextAddition = this.memoryManager.getContextForPrompt();
+            }
+            if (this.learningEngine) {
+                contextAddition += this.learningEngine.getStylePromptAddition();
+            }
+
+            const fullContext = this.workspaceContext + '\n\n' + contextAddition;
+
             const response = await this.aiService.chat(
                 this.messages,
                 this.currentModel,
-                this.workspaceContext
+                fullContext
             );
 
             this.messages.push({ role: 'assistant', content: response.content });
@@ -122,6 +179,144 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private async handlePlanProject(description: string) {
+        if (!this.visionPlanner) return;
+
+        this.postMessage({ type: 'thinking', isThinking: true });
+        try {
+            const vision = await this.visionPlanner.createProjectVision(description, this.workspaceContext);
+            this.postMessage({
+                type: 'visionCreated',
+                vision: vision,
+                markdown: this.visionPlanner.exportVisionToMarkdown()
+            });
+        } catch (error: any) {
+            this.postMessage({ type: 'error', message: error.message });
+        } finally {
+            this.postMessage({ type: 'thinking', isThinking: false });
+        }
+    }
+
+    private async handleApplyTemplate(templateId: string) {
+        if (!this.templateManager) return;
+
+        this.postMessage({ type: 'thinking', isThinking: true });
+        try {
+            const result = await this.templateManager.applyTemplate(templateId);
+            this.postMessage({
+                type: 'templateApplied',
+                success: result.success,
+                message: result.message
+            });
+        } catch (error: any) {
+            this.postMessage({ type: 'error', message: error.message });
+        } finally {
+            this.postMessage({ type: 'thinking', isThinking: false });
+        }
+    }
+
+    private async handleGitCommit() {
+        if (!this.gitOps) return;
+
+        try {
+            const status = await this.gitOps.getStatus();
+            if (status.staged.length === 0) {
+                await this.gitOps.stageFiles([]);
+            }
+
+            const suggestion = await this.gitOps.suggestCommitMessage();
+            this.postMessage({
+                type: 'commitSuggestion',
+                message: suggestion.message,
+                type_: suggestion.type
+            });
+        } catch (error: any) {
+            this.postMessage({ type: 'error', message: error.message });
+        }
+    }
+
+    private async handleGenerateTests() {
+        if (!this.testGenerator) return;
+
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            this.postMessage({ type: 'error', message: 'No active file' });
+            return;
+        }
+
+        this.postMessage({ type: 'thinking', isThinking: true });
+        try {
+            const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+            const suite = await this.testGenerator.generateTests(filePath);
+            await this.testGenerator.createTestFile(suite);
+            this.postMessage({
+                type: 'testsGenerated',
+                testFile: suite.testFile,
+                count: suite.cases.length
+            });
+        } catch (error: any) {
+            this.postMessage({ type: 'error', message: error.message });
+        } finally {
+            this.postMessage({ type: 'thinking', isThinking: false });
+        }
+    }
+
+    private async handleCodeReview() {
+        if (!this.codeReview) return;
+
+        this.postMessage({ type: 'thinking', isThinking: true });
+        try {
+            const result = await this.codeReview.reviewChanges();
+            this.postMessage({
+                type: 'codeReviewComplete',
+                score: result.score,
+                summary: result.summary,
+                comments: result.comments
+            });
+        } catch (error: any) {
+            this.postMessage({ type: 'error', message: error.message });
+        } finally {
+            this.postMessage({ type: 'thinking', isThinking: false });
+        }
+    }
+
+    private updateTabContent() {
+        switch (this.currentTab) {
+            case 'vision':
+                if (this.visionPlanner) {
+                    const vision = this.visionPlanner.getCurrentVision();
+                    this.postMessage({
+                        type: 'tabContent',
+                        tab: 'vision',
+                        content: vision ? this.visionPlanner.exportVisionToMarkdown() : null
+                    });
+                }
+                break;
+            case 'progress':
+                if (this.progressTracker) {
+                    const progress = this.progressTracker.getProgress();
+                    const report = this.progressTracker.generateProgressReport();
+                    this.postMessage({
+                        type: 'tabContent',
+                        tab: 'progress',
+                        progress,
+                        report
+                    });
+                }
+                break;
+            case 'templates':
+                if (this.templateManager) {
+                    const templates = this.templateManager.getTemplates();
+                    this.postMessage({
+                        type: 'tabContent',
+                        tab: 'templates',
+                        templates
+                    });
+                }
+                break;
+        }
+    }
+
     sendWorkspaceContext(structure: string) {
         this.workspaceContext = structure;
         this.postMessage({ 
@@ -140,6 +335,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private getHtmlContent(): string {
         const models = this.aiService.getAvailableModels();
+        const hasEnhancements = !!this.visionPlanner;
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -178,6 +374,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             flex: 1;
         }
 
+        .version-badge {
+            font-size: 10px;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
         .model-select {
             background: var(--vscode-dropdown-background);
             color: var(--vscode-dropdown-foreground);
@@ -188,10 +392,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             cursor: pointer;
         }
 
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+
+        .tab {
+            padding: 8px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--vscode-foreground);
+            opacity: 0.7;
+        }
+
+        .tab:hover {
+            opacity: 1;
+        }
+
+        .tab.active {
+            border-bottom-color: var(--vscode-button-background);
+            opacity: 1;
+        }
+
         .toolbar {
             padding: 8px 12px;
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
             border-bottom: 1px solid var(--vscode-panel-border);
         }
 
@@ -370,26 +598,115 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             color: var(--vscode-foreground);
             margin-bottom: 8px;
         }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            padding: 12px;
+        }
+
+        .quick-action {
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .quick-action:hover {
+            border-color: var(--vscode-button-background);
+        }
+
+        .quick-action-title {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .quick-action-desc {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--vscode-button-background);
+            transition: width 0.3s ease;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .status-success { background: #2ea043; color: white; }
+        .status-warning { background: #d29922; color: white; }
+        .status-error { background: #cf222e; color: white; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>AI-DAN</h1>
+        <span class="version-badge">v2.0</span>
         <select class="model-select" id="modelSelect">
             ${models.map(m => `<option value="${m.id}" ${m.id === 'gpt-4o-mini' ? 'selected' : ''}>${m.name}</option>`).join('')}
         </select>
     </div>
 
+    ${hasEnhancements ? `
+    <div class="tabs">
+        <div class="tab active" data-tab="chat" onclick="switchTab('chat')">Chat</div>
+        <div class="tab" data-tab="vision" onclick="switchTab('vision')">Vision</div>
+        <div class="tab" data-tab="progress" onclick="switchTab('progress')">Progress</div>
+        <div class="tab" data-tab="templates" onclick="switchTab('templates')">Templates</div>
+    </div>
+    ` : ''}
+
     <div class="toolbar">
-        <button onclick="scanWorkspace()">Scan Workspace</button>
-        <button onclick="clearChat()">Clear Chat</button>
+        <button onclick="scanWorkspace()">Scan</button>
+        <button onclick="planProject()">Plan</button>
+        <button onclick="gitCommit()">Commit</button>
+        <button onclick="generateTests()">Tests</button>
+        <button onclick="reviewCode()">Review</button>
+        <button onclick="clearChat()">Clear</button>
     </div>
 
     <div class="messages" id="messages">
         <div class="welcome">
-            <h2>Hey, I'm AI-DAN!</h2>
-            <p>Your autonomous coding assistant.<br>I can create files, run commands, and build things for you.</p>
-            <p style="margin-top: 12px;">Try: "Create a simple Express server"</p>
+            <h2>Hey, I'm AI-DAN v2.0!</h2>
+            <p>Your autonomous development partner.</p>
+            <p style="margin-top:8px;font-size:11px;">I can plan, code, test, review, and deploy!</p>
+        </div>
+        <div class="quick-actions">
+            <div class="quick-action" onclick="quickAction('Plan a new project')">
+                <div class="quick-action-title">Plan Project</div>
+                <div class="quick-action-desc">Create a vision & roadmap</div>
+            </div>
+            <div class="quick-action" onclick="quickAction('Use a template')">
+                <div class="quick-action-title">Templates</div>
+                <div class="quick-action-desc">Start from a template</div>
+            </div>
+            <div class="quick-action" onclick="quickAction('Review my code')">
+                <div class="quick-action-title">Code Review</div>
+                <div class="quick-action-desc">Check quality & security</div>
+            </div>
+            <div class="quick-action" onclick="quickAction('Help me deploy')">
+                <div class="quick-action-title">Deploy</div>
+                <div class="quick-action-desc">Deploy to cloud</div>
+            </div>
         </div>
     </div>
 
@@ -413,6 +730,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         let isThinking = false;
         let hasMessages = false;
+        let currentTab = 'chat';
 
         modelSelect.addEventListener('change', () => {
             vscode.postMessage({ type: 'changeModel', model: modelSelect.value });
@@ -433,12 +751,43 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             input.value = '';
         }
 
+        function quickAction(prompt) {
+            input.value = prompt;
+            sendMessage();
+        }
+
         function scanWorkspace() {
             vscode.postMessage({ type: 'scanWorkspace' });
         }
 
         function clearChat() {
             vscode.postMessage({ type: 'clearChat' });
+        }
+
+        function planProject() {
+            const desc = prompt('Describe your project idea:');
+            if (desc) {
+                vscode.postMessage({ type: 'planProject', description: desc });
+            }
+        }
+
+        function gitCommit() {
+            vscode.postMessage({ type: 'gitCommit' });
+        }
+
+        function generateTests() {
+            vscode.postMessage({ type: 'generateTests' });
+        }
+
+        function reviewCode() {
+            vscode.postMessage({ type: 'reviewCode' });
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('[data-tab="' + tab + '"]')?.classList.add('active');
+            vscode.postMessage({ type: 'changeTab', tab });
         }
 
         function executeAction(action) {
@@ -537,19 +886,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     hasMessages = false;
                     messagesContainer.innerHTML = 
                         '<div class="welcome">' +
-                        '<h2>Hey, I\\'m AI-DAN!</h2>' +
-                        '<p>Your autonomous coding assistant.<br>I can create files, run commands, and build things for you.</p>' +
-                        '<p style="margin-top: 12px;">Try: "Create a simple Express server"</p>' +
+                        '<h2>Hey, I\\'m AI-DAN v2.0!</h2>' +
+                        '<p>Your autonomous development partner.</p>' +
                         '</div>';
                     break;
                 case 'workspaceScanned':
-                    addMessage('assistant', 'Workspace scanned! I now have context about your project structure.');
+                    addMessage('assistant', 'Workspace scanned! I now know your project structure and have learned your coding patterns.');
                     break;
                 case 'actionsExecuted':
                     let resultDetails = data.results.map(r => 
                         (r.success ? '[OK] ' : '[FAIL] ') + r.message
                     ).join('<br>');
                     addMessage('assistant', 'Actions completed: ' + data.summary + '<br><br>' + resultDetails);
+                    break;
+                case 'visionCreated':
+                    addMessage('assistant', 'Project vision created!<br><br><pre>' + data.markdown.substring(0, 500) + '...</pre>');
+                    break;
+                case 'templateApplied':
+                    addMessage('assistant', data.success ? 'Template applied: ' + data.message : 'Error: ' + data.message);
+                    break;
+                case 'commitSuggestion':
+                    addMessage('assistant', 'Suggested commit message:<br><code>' + data.message + '</code>');
+                    break;
+                case 'testsGenerated':
+                    addMessage('assistant', 'Generated ' + data.count + ' tests in ' + data.testFile);
+                    break;
+                case 'codeReviewComplete':
+                    const scoreClass = data.score >= 80 ? 'success' : data.score >= 60 ? 'warning' : 'error';
+                    addMessage('assistant', '<span class="status-badge status-' + scoreClass + '">Score: ' + data.score + '</span><br>' + data.summary);
                     break;
             }
         });
