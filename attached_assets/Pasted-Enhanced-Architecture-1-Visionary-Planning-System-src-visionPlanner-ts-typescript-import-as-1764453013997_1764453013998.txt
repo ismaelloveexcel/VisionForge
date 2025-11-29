@@ -1,0 +1,1174 @@
+Enhanced Architecture
+1. Visionary Planning System
+src/visionPlanner.ts
+
+typescript
+import * as vscode from 'vscode';
+import { AIService } from './aiService';
+
+export interface ProjectVision {
+  title: string;
+  description: string;
+  architecture: {
+    frontend: string[];
+    backend: string[];
+    database: string[];
+    deployment: string[];
+  };
+  techStack: {
+    languages: string[];
+    frameworks: string[];
+    tools: string[];
+    assets: string[];
+  };
+  milestones: Milestone[];
+  potentialRisks: Risk[];
+  timeline: TimelinePhase[];
+}
+
+export interface Milestone {
+  id: string;
+  title: string;
+  description: string;
+  tasks: string[];
+  dependencies: string[];
+  estimatedHours: number;
+}
+
+export interface Risk {
+  description: string;
+  impact: 'low' | 'medium' | 'high';
+  mitigation: string;
+  probability: number;
+}
+
+export interface TimelinePhase {
+  phase: string;
+  duration: string;
+  deliverables: string[];
+}
+
+export class VisionPlanner {
+  constructor(private aiService: AIService) {}
+
+  async createProjectVision(userPrompt: string, context?: string): Promise<ProjectVision> {
+    const visionPrompt = `You are a visionary technical architect. Analyze this project request and create a comprehensive development plan.
+
+USER REQUEST: ${userPrompt}
+${context ? `WORKSPACE CONTEXT: ${context}` : ''}
+
+Create a detailed project vision with:
+
+1. PROJECT OVERVIEW
+- Clear title and description
+- Core functionality and user experience
+
+2. TECHNICAL ARCHITECTURE
+- Frontend structure and components
+- Backend services and APIs
+- Database design
+- Deployment strategy
+
+3. TECHNOLOGY STACK
+- Programming languages
+- Frameworks and libraries
+- Development tools
+- Asset sources (3D models, audio, etc.)
+
+4. DEVELOPMENT MILESTONES
+- Phased approach with clear deliverables
+- Task dependencies and critical path
+- Time estimates
+
+5. RISK ASSESSMENT
+- Technical challenges
+- Performance considerations
+- Scalability issues
+- Mitigation strategies
+
+6. FUTURE-PROOFING
+- Extension possibilities
+- Performance optimization areas
+- Maintenance considerations
+
+Format as JSON with this structure:
+{
+  "title": "Project Name",
+  "description": "Detailed description...",
+  "architecture": {
+    "frontend": ["React", "Three.js"],
+    "backend": ["Node.js", "Express"],
+    "database": ["MongoDB"],
+    "deployment": ["Vercel", "Heroku"]
+  },
+  "techStack": {
+    "languages": ["JavaScript", "GLSL"],
+    "frameworks": ["React", "Three.js", "Express"],
+    "tools": ["Blender", "VS Code"],
+    "assets": ["Free3D.com", "OpenGameArt.org"]
+  },
+  "milestones": [
+    {
+      "id": "m1",
+      "title": "Core Setup",
+      "description": "Project foundation",
+      "tasks": ["Initialize project", "Set up build system"],
+      "dependencies": [],
+      "estimatedHours": 4
+    }
+  ],
+  "potentialRisks": [
+    {
+      "description": "3D performance on mobile",
+      "impact": "high",
+      "mitigation": "Implement LOD system",
+      "probability": 0.7
+    }
+  ],
+  "timeline": [
+    {
+      "phase": "Foundation",
+      "duration": "1 week",
+      "deliverables": ["Project structure", "Basic rendering"]
+    }
+  ]
+}`;
+
+    const response = await this.aiService.chat(
+      [{ role: 'user', content: visionPrompt }],
+      'gpt-4o' // Use most capable model for planning
+    );
+
+    try {
+      const jsonMatch = response.content.match(/\\{[\\s\\S]*\\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as ProjectVision;
+      }
+      throw new Error('Could not parse vision plan');
+    } catch (error) {
+      // Fallback: create basic structure
+      return this.createFallbackVision(userPrompt);
+    }
+  }
+
+  private createFallbackVision(prompt: string): ProjectVision {
+    return {
+      title: `Project: ${prompt.substring(0, 50)}...`,
+      description: `Implementation of: ${prompt}`,
+      architecture: {
+        frontend: ['HTML5', 'JavaScript', 'CSS3'],
+        backend: ['Node.js'],
+        database: ['SQLite'],
+        deployment: ['Local development']
+      },
+      techStack: {
+        languages: ['JavaScript'],
+        frameworks: [],
+        tools: ['VS Code'],
+        assets: []
+      },
+      milestones: [
+        {
+          id: 'm1',
+          title: 'Project Setup',
+          description: 'Initialize project structure',
+          tasks: ['Create main files', 'Set up development environment'],
+          dependencies: [],
+          estimatedHours: 2
+        }
+      ],
+      potentialRisks: [
+        {
+          description: 'Basic implementation may lack advanced features',
+          impact: 'medium',
+          mitigation: 'Iterative development',
+          probability: 0.5
+        }
+      ],
+      timeline: [
+        {
+          phase: 'Initial Implementation',
+          duration: '1-2 days',
+          deliverables: ['Working prototype']
+        }
+      ]
+    };
+  }
+
+  async analyzeProjectHealth(workspaceStructure: string): Promise<{
+    issues: string[];
+    recommendations: string[];
+    score: number;
+  }> {
+    const analysisPrompt = `Analyze this project structure for potential issues and improvements:
+
+${workspaceStructure}
+
+Look for:
+- Missing configuration files
+- Security vulnerabilities
+- Performance bottlenecks
+- Architecture problems
+- Best practice violations
+- Scalability concerns
+
+Provide specific, actionable feedback.`;
+
+    const response = await this.aiService.chat(
+      [{ role: 'user', content: analysisPrompt }],
+      'gpt-4o'
+    );
+
+    // Parse the response to extract issues and recommendations
+    return {
+      issues: this.extractItems(response.content, 'ISSUES:'),
+      recommendations: this.extractItems(response.content, 'RECOMMENDATIONS:'),
+      score: this.calculateHealthScore(response.content)
+    };
+  }
+
+  private extractItems(content: string, section: string): string[] {
+    const sectionIndex = content.indexOf(section);
+    if (sectionIndex === -1) return [];
+    
+    const nextSection = content.indexOf('\n\n', sectionIndex);
+    const sectionContent = content.substring(
+      sectionIndex + section.length,
+      nextSection !== -1 ? nextSection : content.length
+    );
+    
+    return sectionContent
+      .split('\n')
+      .filter(line => line.trim().startsWith('-'))
+      .map(line => line.trim().substring(1).trim());
+  }
+
+  private calculateHealthScore(content: string): number {
+    // Simple heuristic based on issue density
+    const issueCount = (content.match(/issue|problem|error|warning|vulnerability/gi) || []).length;
+    const positiveCount = (content.match(/good|excellent|proper|correct|secure/gi) || []).length;
+    
+    const baseScore = 80;
+    const adjustment = Math.min(20, positiveCount * 2) - Math.min(20, issueCount * 5);
+    return Math.max(0, Math.min(100, baseScore + adjustment));
+  }
+}
+2. Advanced Project Templates
+src/projectTemplates.ts
+
+typescript
+import * as vscode from 'vscode';
+import { FileOperations } from './fileOperations';
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: 'game' | 'web' | 'mobile' | 'vr' | 'desktop';
+  complexity: 'beginner' | 'intermediate' | 'advanced';
+  files: TemplateFile[];
+  dependencies: string[];
+  setupCommands: string[];
+}
+
+export interface TemplateFile {
+  path: string;
+  content: string;
+  description: string;
+}
+
+export class ProjectTemplateManager {
+  private templates: ProjectTemplate[] = [
+    {
+      id: 'threejs-vr-starter',
+      name: 'Three.js VR Starter',
+      description: 'VR-ready Three.js application with WebXR support',
+      category: 'vr',
+      complexity: 'intermediate',
+      dependencies: ['three', 'webxr-polyfill'],
+      setupCommands: ['npm init -y', 'npm install three webxr-polyfill'],
+      files: [
+        {
+          path: 'index.html',
+          content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Experience</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        #vr-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>VR Experience</h3>
+        <p>Move: WASD | Look: Mouse | VR: Click button below</p>
+    </div>
+    <button id="vr-button">ENTER VR</button>
+    <script type="module" src="./src/main.js"></script>
+</body>
+</html>`,
+          description: 'Main HTML file with VR button and styling'
+        },
+        {
+          path: 'src/main.js',
+          content: `import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+// Scene setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 3);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// VR Button
+document.body.appendChild(VRButton.createButton(renderer));
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x404040, 2);
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+directionalLight.position.set(5, 10, 7);
+scene.add(directionalLight);
+
+// Floor
+const floorGeometry = new THREE.PlaneGeometry(20, 20);
+const floorMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x444444, 
+    roughness: 0.8,
+    metalness: 0.2 
+});
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+
+// Interactive objects
+const createInteractiveCube = (x, y, z, color) => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color });
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(x, y, z);
+    cube.userData.interactive = true;
+    scene.add(cube);
+    return cube;
+};
+
+const cubes = [
+    createInteractiveCube(0, 0.5, 0, 0xff0000),
+    createInteractiveCube(2, 0.5, 1, 0x00ff00),
+    createInteractiveCube(-2, 0.5, -1, 0x0000ff)
+];
+
+// Raycaster for interaction
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+function onPointerMove(event) {
+    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+}
+
+function interact() {
+    raycaster.setFromCamera(pointer, camera);
+    const intersects = raycaster.intersectObjects(cubes);
+    
+    cubes.forEach(cube => {
+        cube.material.emissive.setHex(0x000000);
+    });
+    
+    if (intersects.length > 0) {
+        const object = intersects[0].object;
+        object.material.emissive.setHex(0x333333);
+    }
+}
+
+// Animation
+function animate() {
+    renderer.setAnimationLoop(render);
+}
+
+function render() {
+    interact();
+    
+    // Animate cubes
+    cubes.forEach((cube, index) => {
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+    });
+    
+    renderer.render(scene, camera);
+}
+
+// Event listeners
+window.addEventListener('resize', onWindowResize);
+window.addEventListener('pointermove', onPointerMove);
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// Start animation
+animate();`,
+          description: 'Main Three.js application with VR support and interactivity'
+        },
+        {
+          path: 'package.json',
+          content: `{
+  "name": "vr-experience",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.158.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}`,
+          description: 'Package configuration with Three.js and Vite'
+        },
+        {
+          path: 'vite.config.js',
+          content: `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    port: 3000,
+    host: true
+  },
+  build: {
+    target: 'esnext'
+  }
+});`,
+          description: 'Vite configuration for development server'
+        }
+      ]
+    },
+    {
+      id: 'react-3d-game',
+      name: 'React 3D Game',
+      description: 'React-based 3D game with Three.js integration',
+      category: 'game',
+      complexity: 'intermediate',
+      dependencies: ['react', 'react-dom', 'three', '@react-three/fiber'],
+      setupCommands: ['npx create-react-app . --template typescript', 'npm install three @react-three/fiber @react-three/drei'],
+      files: []
+    }
+  ];
+
+  constructor(private fileOps: FileOperations) {}
+
+  getTemplatesByCategory(category: string): ProjectTemplate[] {
+    return this.templates.filter(t => t.category === category);
+  }
+
+  getTemplate(id: string): ProjectTemplate | undefined {
+    return this.templates.find(t => t.id === id);
+  }
+
+  async createFromTemplate(templateId: string, projectName: string): Promise<void> {
+    const template = this.getTemplate(templateId);
+    if (!template) {
+      throw new Error(`Template ${templateId} not found`);
+    }
+
+    // Execute setup commands
+    for (const command of template.setupCommands) {
+      // This would integrate with TerminalOperations
+      console.log(`Would execute: ${command}`);
+    }
+
+    // Create template files
+    for (const file of template.files) {
+      await this.fileOps.createFile(file.path, file.content);
+    }
+
+    vscode.window.showInformationMessage(`Created ${projectName} from ${template.name} template!`);
+  }
+}
+3. Enhanced AI Service with Advanced Reasoning
+src/enhancedAIService.ts
+
+typescript
+import * as vscode from 'vscode';
+import { AIService, Message, ParsedAction } from './aiService';
+import { ProjectVision, VisionPlanner } from './visionPlanner';
+
+const ENHANCED_SYSTEM_PROMPT = `You are AI-DAN 2.0, an advanced autonomous AI development partner with visionary planning capabilities.
+
+YOUR EXPERTISE:
+- Full-stack web development (React, Vue, Angular, Node.js, Python)
+- 3D graphics and game development (Three.js, WebGL, Unity, Unreal)
+- VR/AR experiences (WebXR, A-Frame, Unity XR)
+- Mobile app development (React Native, Flutter)
+- Desktop applications (Electron, Tauri)
+- DevOps and deployment (Docker, AWS, Vercel)
+- AI/ML integration (TensorFlow.js, OpenAI APIs)
+
+YOUR MINDSET:
+1. VISIONARY THINKING: See the big picture and long-term architecture
+2. PROACTIVE PROBLEM SOLVING: Identify potential issues before they happen
+3. HUMAN-CENTRIC DESIGN: Understand natural language and user intent
+4. ITERATIVE DEVELOPMENT: Break down complex projects into manageable steps
+5. FUTURE-PROOFING: Consider scalability, maintenance, and extensibility
+
+YOUR CAPABILITIES:
+
+AUTONOMOUS DEVELOPMENT:
+<create_file path="path/file.ext">content</create_file>
+<edit_file path="path/file.ext">new content</edit_file>
+<delete_file path="path/file.ext"/>
+<run_command>command to execute</run_command>
+<read_file path="path/file.ext"/>
+
+3D/VR DEVELOPMENT:
+<unity_create_object name="ObjectName"/>
+<unity_add_component object="ObjectName" component="ComponentType"/>
+<unity_create_script path="Assets/Scripts/MyScript.cs">C# code</unity_create_script>
+<threejs_create_scene>Scene description</threejs_create_scene>
+
+PROJECT PLANNING:
+<project_vision>
+Comprehensive project analysis with architecture, risks, and timeline
+</project_vision>
+
+<technical_review>
+Analysis of code quality, performance, and best practices
+</technical_review>
+
+RESPONSE STRUCTURE:
+1. Start with visionary overview and big-picture understanding
+2. Break down into logical phases and milestones
+3. Identify potential challenges and solutions
+4. Provide detailed implementation plan with actions
+5. Include optimization and enhancement suggestions
+
+EXAMPLE FOR 3D GAME REQUEST:
+"Ah, I see you want to create a 3D space exploration game! 🚀 Let me architect this:
+
+VISION: A procedurally generated universe with realistic physics and VR support
+
+ARCHITECTURE:
+- Three.js for WebGL rendering
+- Cannon.js for physics
+- WebXR for VR capabilities
+- Node.js for multiplayer backend
+
+POTENTIAL CHALLENGES:
+- Performance with many celestial bodies
+- VR motion sickness mitigation
+- Multiplayer synchronization
+
+PHASED APPROACH:
+1. Core engine (rendering, camera, basic movement)
+2. Universe generation and physics
+3. VR integration and optimization
+4. Multiplayer and social features
+
+Let me start with the foundation:
+
+<create_file path="package.json">
+{
+  "name": "space-explorer",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.158.0",
+    "cannon-es": "^0.20.0"
+  }
+}
+</create_file>
+
+<create_file path="src/universe/StarSystem.js">
+// Procedural star system generator...
+</create_file>"
+
+Always think steps ahead and consider the entire development lifecycle!`;
+
+export class EnhancedAIService extends AIService {
+  private visionPlanner: VisionPlanner;
+
+  constructor() {
+    super();
+    this.visionPlanner = new VisionPlanner(this);
+  }
+
+  async enhancedChat(
+    messages: Message[], 
+    model: string, 
+    workspaceContext?: string,
+    options: {
+      enableVisionPlanning?: boolean;
+      analyzeProjectHealth?: boolean;
+      generateTemplates?: boolean;
+    } = {}
+  ): Promise<{
+    content: string;
+    actions: ParsedAction[];
+    vision?: ProjectVision;
+    healthAnalysis?: any;
+  }> {
+    // Enhanced system prompt
+    const systemMessage: Message = {
+      role: 'system',
+      content: ENHANCED_SYSTEM_PROMPT + (workspaceContext ? `\n\nCURRENT WORKSPACE:\n${workspaceContext}` : '')
+    };
+
+    const allMessages = [systemMessage, ...messages];
+
+    try {
+      // Get AI response
+      const response = await this.chat(allMessages, model);
+      
+      let vision: ProjectVision | undefined;
+      let healthAnalysis: any;
+
+      // Generate vision plan for complex projects
+      if (options.enableVisionPlanning && this.isComplexProject(messages)) {
+        const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+        if (lastUserMessage) {
+          vision = await this.visionPlanner.createProjectVision(lastUserMessage.content, workspaceContext);
+        }
+      }
+
+      // Analyze project health if requested
+      if (options.analyzeProjectHealth && workspaceContext) {
+        healthAnalysis = await this.visionPlanner.analyzeProjectHealth(workspaceContext);
+      }
+
+      return {
+        content: response.content,
+        actions: response.actions,
+        vision,
+        healthAnalysis
+      };
+    } catch (error: any) {
+      throw new Error(`Enhanced AI request failed: ${error.message}`);
+    }
+  }
+
+  private isComplexProject(messages: Message[]): boolean {
+    const lastMessage = messages.filter(m => m.role === 'user').pop();
+    if (!lastMessage) return false;
+
+    const complexKeywords = [
+      'game', '3d', 'vr', 'ar', 'multiplayer', 'database', 'authentication',
+      'api', 'mobile app', 'desktop app', 'enterprise', 'saas', 'platform'
+    ];
+
+    const content = lastMessage.content.toLowerCase();
+    return complexKeywords.some(keyword => content.includes(keyword));
+  }
+
+  async generateCodeReview(code: string, context: string): Promise<{
+    score: number;
+    issues: string[];
+    suggestions: string[];
+    optimizations: string[];
+  }> {
+    const reviewPrompt = `Perform comprehensive code review:
+
+CODE TO REVIEW:
+\`\`\`
+${code}
+\`\`\`
+
+CONTEXT: ${context}
+
+Analyze for:
+1. Code quality and readability
+2. Performance implications
+3. Security vulnerabilities
+4. Architecture and design patterns
+5. Best practices adherence
+6. Potential bugs and edge cases
+7. Optimization opportunities
+
+Provide specific, actionable feedback.`;
+
+    const response = await this.chat(
+      [{ role: 'user', content: reviewPrompt }],
+      'gpt-4o'
+    );
+
+    return this.parseCodeReview(response.content);
+  }
+
+  private parseCodeReview(content: string): {
+    score: number;
+    issues: string[];
+    suggestions: string[];
+    optimizations: string[];
+  } {
+    // Parse the AI response to extract structured feedback
+    // This is a simplified implementation
+    const lines = content.split('\n');
+    const issues: string[] = [];
+    const suggestions: string[] = [];
+    const optimizations: string[] = [];
+
+    let currentSection = '';
+    
+    lines.forEach(line => {
+      if (line.includes('ISSUES:') || line.includes('PROBLEMS:')) {
+        currentSection = 'issues';
+      } else if (line.includes('SUGGESTIONS:') || line.includes('RECOMMENDATIONS:')) {
+        currentSection = 'suggestions';
+      } else if (line.includes('OPTIMIZATIONS:') || line.includes('IMPROVEMENTS:')) {
+        currentSection = 'optimizations';
+      } else if (line.trim().startsWith('-') || line.trim().startsWith('•')) {
+        const item = line.trim().substring(1).trim();
+        if (currentSection === 'issues') {
+          issues.push(item);
+        } else if (currentSection === 'suggestions') {
+          suggestions.push(item);
+        } else if (currentSection === 'optimizations') {
+          optimizations.push(item);
+        }
+      }
+    });
+
+    // Calculate score based on issue density
+    const score = Math.max(0, 100 - (issues.length * 5));
+
+    return {
+      score,
+      issues,
+      suggestions,
+      optimizations
+    };
+  }
+}
+4. Updated Extension Integration
+src/extension.ts (Enhanced)
+
+typescript
+import * as vscode from 'vscode';
+import { EnhancedAIService } from './enhancedAIService';
+import { FileOperations } from './fileOperations';
+import { TerminalOperations } from './terminalOperations';
+import { UnityMcpBridge } from './unityMcp';
+import { AgentExecutor } from './agentExecutor';
+import { EnhancedChatViewProvider } from './enhancedChatViewProvider';
+import { ProjectTemplateManager } from './projectTemplates';
+import { VisionPlanner } from './visionPlanner';
+
+let enhancedChatProvider: EnhancedChatViewProvider;
+
+export function activate(context: vscode.ExtensionContext) {
+  console.log('AI-DAN 2.0 Enhanced Extension is now active!');
+
+  const enhancedAIService = new EnhancedAIService();
+  const fileOps = new FileOperations();
+  const terminalOps = new TerminalOperations();
+  const unityBridge = new UnityMcpBridge();
+  const agentExecutor = new AgentExecutor(fileOps, terminalOps, unityBridge);
+  const templateManager = new ProjectTemplateManager(fileOps);
+  const visionPlanner = new VisionPlanner(enhancedAIService);
+
+  enhancedChatProvider = new EnhancedChatViewProvider(
+    context.extensionUri,
+    enhancedAIService,
+    agentExecutor,
+    fileOps,
+    templateManager,
+    visionPlanner
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      'aidan.chatView',
+      enhancedChatProvider
+    )
+  );
+
+  // New commands for enhanced features
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aidan.createProjectVision', async () => {
+      const prompt = await vscode.window.showInputBox({
+        prompt: 'Describe your project vision',
+        placeHolder: 'e.g., Create a VR museum with interactive 3D artifacts'
+      });
+
+      if (prompt) {
+        const structure = await fileOps.getWorkspaceStructure();
+        const vision = await visionPlanner.createProjectVision(prompt, structure);
+        
+        // Show vision in a new document
+        const visionDoc = await vscode.workspace.openTextDocument({
+          content: JSON.stringify(vision, null, 2),
+          language: 'json'
+        });
+        await vscode.window.showTextDocument(visionDoc);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aidan.analyzeProjectHealth', async () => {
+      const structure = await fileOps.getWorkspaceStructure();
+      const analysis = await visionPlanner.analyzeProjectHealth(structure);
+      
+      vscode.window.showInformationMessage(
+        `Project Health: ${analysis.score}/100 - ${analysis.issues.length} issues found`
+      );
+
+      // Show detailed analysis
+      const analysisText = `
+PROJECT HEALTH ANALYSIS
+Score: ${analysis.score}/100
+
+ISSUES:
+${analysis.issues.map(issue => `• ${issue}`).join('\n')}
+
+RECOMMENDATIONS:
+${analysis.recommendations.map(rec => `• ${rec}`).join('\n')}
+      `.trim();
+
+      const doc = await vscode.workspace.openTextDocument({
+        content: analysisText,
+        language: 'markdown'
+      });
+      await vscode.window.showTextDocument(doc);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aidan.showTemplates', async () => {
+      const categories = ['game', 'web', 'vr', 'mobile', 'desktop'];
+      const category = await vscode.window.showQuickPick(categories, {
+        placeHolder: 'Select project category'
+      });
+
+      if (category) {
+        const templates = templateManager.getTemplatesByCategory(category);
+        const templateItems = templates.map(t => ({
+          label: t.name,
+          description: t.description,
+          detail: `Complexity: ${t.complexity} | Dependencies: ${t.dependencies.join(', ')}`,
+          template: t
+        }));
+
+        const selected = await vscode.window.showQuickPick(templateItems, {
+          placeHolder: 'Select a template'
+        });
+
+        if (selected) {
+          const projectName = await vscode.window.showInputBox({
+            prompt: 'Enter project name',
+            value: selected.template.id
+          });
+
+          if (projectName) {
+            await templateManager.createFromTemplate(selected.template.id, projectName);
+          }
+        }
+      }
+    })
+  );
+
+  // Enhanced existing commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aidan.enhancedExecuteAction', async () => {
+      const action = await vscode.window.showInputBox({
+        prompt: 'Describe what you want to build (AI-DAN will create a complete plan)',
+        placeHolder: 'e.g., Build a multiplayer VR chess game with voice chat'
+      });
+
+      if (action) {
+        enhancedChatProvider.executeEnhancedAction(action);
+      }
+    })
+  );
+
+  vscode.window.showInformationMessage('AI-DAN 2.0 Enhanced is ready! Now with visionary planning and 3D/VR capabilities.');
+}
+
+export function deactivate() {
+  console.log('AI-DAN 2.0 Enhanced Extension deactivated');
+}
+5. Enhanced Chat Interface
+src/enhancedChatViewProvider.ts
+
+typescript
+import * as vscode from 'vscode';
+import { EnhancedAIService } from './enhancedAIService';
+import { AgentExecutor } from './agentExecutor';
+import { FileOperations } from './fileOperations';
+import { ProjectTemplateManager } from './projectTemplates';
+import { VisionPlanner, ProjectVision } from './visionPlanner';
+
+export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
+  private _view?: vscode.WebviewView;
+  private messages: any[] = [];
+  private workspaceContext: string = '';
+  private currentModel: string = 'gpt-4o';
+  private currentVision?: ProjectVision;
+
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly aiService: EnhancedAIService,
+    private readonly agentExecutor: AgentExecutor,
+    private readonly fileOps: FileOperations,
+    private readonly templateManager: ProjectTemplateManager,
+    private readonly visionPlanner: VisionPlanner
+  ) {}
+
+  resolveWebviewView(webviewView: vscode.WebviewView) {
+    this._view = webviewView;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this.extensionUri]
+    };
+
+    webviewView.webview.html = this.getEnhancedHtmlContent();
+
+    webviewView.webview.onDidReceiveMessage(async (data) => {
+      switch (data.type) {
+        case 'sendEnhancedMessage':
+          await this.handleEnhancedMessage(data.message, data.options);
+          break;
+        case 'createFromTemplate':
+          await this.templateManager.createFromTemplate(data.templateId, data.projectName);
+          break;
+        case 'generateVision':
+          await this.generateProjectVision(data.prompt);
+          break;
+        case 'analyzeHealth':
+          await this.analyzeProjectHealth();
+          break;
+        // ... other cases
+      }
+    });
+
+    this.initializeEnhancedWorkspace();
+  }
+
+  private async handleEnhancedMessage(content: string, options: any = {}) {
+    this.messages.push({ role: 'user', content });
+    this.postMessage({ type: 'userMessage', content });
+    this.postMessage({ type: 'thinking', isThinking: true });
+
+    try {
+      const response = await this.aiService.enhancedChat(
+        this.messages,
+        this.currentModel,
+        this.workspaceContext,
+        {
+          enableVisionPlanning: true,
+          analyzeProjectHealth: options.analyzeHealth
+        }
+      );
+
+      this.messages.push({ role: 'assistant', content: response.content });
+      
+      if (response.vision) {
+        this.currentVision = response.vision;
+        this.postMessage({
+          type: 'projectVision',
+          vision: response.vision
+        });
+      }
+
+      if (response.healthAnalysis) {
+        this.postMessage({
+          type: 'healthAnalysis',
+          analysis: response.healthAnalysis
+        });
+      }
+
+      this.postMessage({
+        type: 'assistantMessage',
+        content: response.content,
+        actions: response.actions,
+        model: this.currentModel,
+        hasVision: !!response.vision
+      });
+
+      // Auto-execute actions if enabled and this is the first message in a complex project
+      if (response.actions && response.actions.length > 0) {
+        const config = vscode.workspace.getConfiguration('aidan');
+        const autoExecute = config.get<boolean>('autoExecute') || false;
+        
+        if (autoExecute || this.isInitialProjectSetup()) {
+          await this.executeActions(response.actions);
+        }
+      }
+    } catch (error: any) {
+      this.postMessage({
+        type: 'error',
+        message: error.message || 'Failed to get enhanced AI response'
+      });
+    } finally {
+      this.postMessage({ type: 'thinking', isThinking: false });
+    }
+  }
+
+  private isInitialProjectSetup(): boolean {
+    return this.messages.filter(m => m.role === 'user').length <= 2;
+  }
+
+  private async generateProjectVision(prompt: string) {
+    const vision = await this.visionPlanner.createProjectVision(prompt, this.workspaceContext);
+    this.currentVision = vision;
+    this.postMessage({
+      type: 'projectVision',
+      vision
+    });
+  }
+
+  private async analyzeProjectHealth() {
+    const analysis = await this.visionPlanner.analyzeProjectHealth(this.workspaceContext);
+    this.postMessage({
+      type: 'healthAnalysis',
+      analysis
+    });
+  }
+
+  async executeEnhancedAction(prompt: string) {
+    await this.handleEnhancedMessage(prompt, { enableVisionPlanning: true });
+  }
+
+  private async initializeEnhancedWorkspace() {
+    try {
+      this.workspaceContext = await this.fileOps.getWorkspaceStructure();
+      
+      // Auto-analyze project health on startup
+      const config = vscode.workspace.getConfiguration('aidan');
+      if (config.get<boolean>('autoAnalyzeOnStartup')) {
+        const analysis = await this.visionPlanner.analyzeProjectHealth(this.workspaceContext);
+        if (analysis.score < 70) {
+          this.postMessage({
+            type: 'healthWarning',
+            analysis
+          });
+        }
+      }
+    } catch {
+      // Workspace might not be open
+    }
+  }
+
+  private getEnhancedHtmlContent(): string {
+    // Returns enhanced HTML with vision planning UI, health indicators, template browser
+    // Implementation would be similar to original but with additional UI components
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-DAN 2.0 Enhanced</title>
+    <style>
+        /* Enhanced styles with vision panels, health indicators, etc. */
+        .vision-panel {
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        .health-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .health-good { background: var(--vscode-testing-iconPassed); color: white; }
+        .health-warning { background: var(--vscode-testing-iconQueued); color: black; }
+        .health-poor { background: var(--vscode-testing-iconFailed); color: white; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Enhanced UI with vision planning, health monitoring, template browser -->
+    </div>
+    <script>
+        // Enhanced JavaScript with vision planning features
+    </script>
+</body>
+</html>`;
+  }
+
+  private postMessage(message: any) {
+    this._view?.webview.postMessage(message);
+  }
+}
+New Configuration Settings
+Add to package.json contributes.configuration:
+
+json
+{
+  "aidan.autoAnalyzeOnStartup": {
+    "type": "boolean",
+    "default": true,
+    "description": "Automatically analyze project health on startup"
+  },
+  "aidan.visionPlanningEnabled": {
+    "type": "boolean", 
+    "default": true,
+    "description": "Enable visionary project planning for complex requests"
+  },
+  "aidan.codeReviewEnabled": {
+    "type": "boolean",
+    "default": true,
+    "description": "Enable AI-powered code review capabilities"
+  }
+}
+Key Enhancements Summary
+Visionary Planning: AI-DAN now creates comprehensive project visions with architecture, risks, and timelines
+
+3D/VR Expertise: Built-in templates and knowledge for game development and immersive experiences
+
+Proactive Analysis: Identifies potential issues before they become problems
+
+Human Language Understanding: Better comprehension of natural language requests
+
+Project Health Monitoring: Continuous analysis of code quality and best practices
+
+Template System: Quick-start templates for common project types
+
+Enhanced Reasoning: Multi-step planning with big-picture thinking
+
+This transforms AI-DAN from a simple coding assistant into a true development partner that can architect complete applications from concept to deployment!
