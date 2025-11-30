@@ -43,15 +43,17 @@ export function ChatInput({
     <div className="flex items-end gap-2 rounded-lg border border-border bg-background p-2">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="shrink-0 opacity-50 cursor-not-allowed"
-            data-testid="button-attach"
-            disabled
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
+          <span className="shrink-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="opacity-50 pointer-events-none"
+              data-testid="button-attach"
+              disabled
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+          </span>
         </TooltipTrigger>
         <TooltipContent side="top">
           <p>File attachments coming soon!</p>
