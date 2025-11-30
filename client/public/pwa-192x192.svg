@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="24" fill="#0a0a0a"/>
-  <circle cx="96" cy="70" r="35" fill="none" stroke="#10b981" stroke-width="4"/>
-  <circle cx="96" cy="70" r="12" fill="#10b981"/>
-  <path d="M50 130 L96 100 L142 130 L142 165 L50 165 Z" fill="none" stroke="#10b981" stroke-width="4" stroke-linejoin="round"/>
-  <text x="96" y="155" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#10b981" text-anchor="middle">AI-DAN</text>
-</svg>

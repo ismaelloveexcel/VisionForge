@@ -286,3 +286,46 @@
     inset: -1px;
   }
 }
+
+/* PWA Mobile Optimizations */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hover-elevate:hover::after,
+  .hover-elevate-2:hover::after {
+    background-color: transparent !important;
+  }
+  
+  .hover-elevate:active::after,
+  .hover-elevate-2:active::after {
+    background-color: var(--elevate-2) !important;
+  }
+}
+
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
