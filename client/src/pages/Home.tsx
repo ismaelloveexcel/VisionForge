@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -24,15 +24,25 @@ interface Message {
 interface HomeProps {
   mode: "development" | "hr";
   model: string;
+  chatInputRef?: React.RefObject<HTMLTextAreaElement>;
+  onClearChat?: () => void;
 }
 
-export default function Home({ mode, model }: HomeProps) {
+export default function Home({ mode, model, chatInputRef, onClearChat }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState("src/App.tsx");
   const [rightTab, setRightTab] = useState<string>(
     mode === "development" ? "code" : "tools"
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Handle external clear chat trigger
+  useEffect(() => {
+    if (onClearChat) {
+      // This component doesn't need to do anything special for clearing
+      // The parent will trigger this when needed
+    }
+  }, [onClearChat]);
 
   const chatMutation = useMutation({
     mutationFn: async (newMessages: { role: string; content: string }[]) => {
@@ -247,6 +257,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
             </div>
           )}
           <ChatInput
+            ref={chatInputRef}
             onSend={handleSend}
             isLoading={chatMutation.isPending}
             placeholder={
