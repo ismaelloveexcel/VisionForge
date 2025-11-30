@@ -4,24 +4,37 @@ import { storage } from "./storage";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
-// AI Provider Clients
-// OpenAI - using Replit AI Integrations (no API key needed, billed to credits)
-const openaiClient = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+// Check for API keys
+const hasOpenAIKey = Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+const hasAnthropicKey = Boolean(process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY);
+const hasOpenRouterKey = Boolean(process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY);
 
-// Anthropic/Claude - using Replit AI Integrations (no API key needed, billed to credits)
-const anthropicClient = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-});
+// AI Provider Clients - lazy initialization to handle missing keys gracefully
+let openaiClient: OpenAI | null = null;
+let anthropicClient: Anthropic | null = null;
+let openrouterClient: OpenAI | null = null;
 
-// OpenRouter (for DeepSeek, Grok, Llama, etc.) - using Replit AI Integrations
-const openrouterClient = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
-});
+// Initialize clients only if API keys are available
+if (hasOpenAIKey) {
+  openaiClient = new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  });
+}
+
+if (hasAnthropicKey) {
+  anthropicClient = new Anthropic({
+    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY,
+    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+  });
+}
+
+if (hasOpenRouterKey) {
+  openrouterClient = new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
+  });
+}
 
 // Available models configuration
 export const AVAILABLE_MODELS = {
@@ -127,6 +140,10 @@ async function chatWithOpenAI(
   model: string,
   systemPrompt: string
 ): Promise<string> {
+  if (!openaiClient) {
+    throw new Error("OpenAI API key not configured. Please set OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_API_KEY.");
+  }
+  
   const formattedMessages = [
     { role: "system" as const, content: systemPrompt },
     ...messages.map((m) => ({
@@ -149,6 +166,10 @@ async function chatWithAnthropic(
   model: string,
   systemPrompt: string
 ): Promise<string> {
+  if (!anthropicClient) {
+    throw new Error("Anthropic API key not configured. Please set ANTHROPIC_API_KEY or AI_INTEGRATIONS_ANTHROPIC_API_KEY.");
+  }
+  
   const formattedMessages = messages.map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
@@ -173,6 +194,10 @@ async function chatWithOpenRouter(
   model: string,
   systemPrompt: string
 ): Promise<string> {
+  if (!openrouterClient) {
+    throw new Error("OpenRouter API key not configured. Please set OPENROUTER_API_KEY or AI_INTEGRATIONS_OPENROUTER_API_KEY.");
+  }
+  
   const formattedMessages = [
     { role: "system" as const, content: systemPrompt },
     ...messages.map((m) => ({
@@ -195,9 +220,26 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Get available models
+  // Get available models - only return models that have API keys configured
   app.get("/api/models", (_req, res) => {
-    res.json(AVAILABLE_MODELS);
+    const availableModels: Record<string, typeof AVAILABLE_MODELS[keyof typeof AVAILABLE_MODELS]> = {};
+    
+    for (const [key, config] of Object.entries(AVAILABLE_MODELS)) {
+      if (config.provider === "openai" && hasOpenAIKey) {
+        availableModels[key] = config;
+      } else if (config.provider === "anthropic" && hasAnthropicKey) {
+        availableModels[key] = config;
+      } else if (config.provider === "openrouter" && hasOpenRouterKey) {
+        availableModels[key] = config;
+      }
+    }
+    
+    // If no API keys are configured, return all models with a note
+    if (Object.keys(availableModels).length === 0) {
+      res.json(AVAILABLE_MODELS);
+    } else {
+      res.json(availableModels);
+    }
   });
 
   // Chat endpoint with model selection
@@ -235,6 +277,14 @@ export async function registerRoutes(
       res.json({ content, model });
     } catch (error: any) {
       console.error("Chat API error:", error?.message || error);
+      
+      // Handle missing API key configuration
+      if (error?.message?.includes("API key not configured")) {
+        return res.status(503).json({ 
+          error: "Configuration required",
+          content: `I'm not fully configured yet! ${error.message} Once configured, I'll be ready to help you build amazing things! 🚀`
+        });
+      }
       
       if (error?.message?.includes("429") || error?.message?.includes("rate")) {
         return res.json({ 
