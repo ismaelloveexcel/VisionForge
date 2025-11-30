@@ -9,6 +9,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ModeSwitcher } from "@/components/ModeSwitcher";
 import { ModelSelector } from "@/components/ModelSelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { InstallButton } from "@/components/InstallButton";
 import Home from "@/pages/Home";
 import Projects from "@/pages/Projects";
 import Templates from "@/pages/Templates";
@@ -65,7 +66,10 @@ function App() {
                   <ModeSwitcher mode={mode} onModeChange={setMode} />
                   <ModelSelector value={model} onChange={setModel} />
                 </div>
-                <ThemeToggle />
+                <div className="flex items-center gap-2">
+                  <InstallButton />
+                  <ThemeToggle />
+                </div>
               </header>
               <main className="flex-1 overflow-hidden">
                 <Router mode={mode} model={model} />
