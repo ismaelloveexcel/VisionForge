@@ -5,6 +5,7 @@ import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
+import { UAELaborLawSearchTool, GratuityCalculatorTool, EmitisationCheckTool } from "./tools/uae-law-rag";
 
 const DEV_SYSTEM_PROMPT = `You are AI-DAN, an autonomous AI development agent with the personality of JARVIS meets Hitchhiker's Guide - witty, capable, and genuinely helpful. You don't just talk about building things, you ACTUALLY BUILD THEM using the tools available to you.
 
@@ -60,16 +61,30 @@ const HR_SYSTEM_PROMPT = `You are AI-DAN, a UAE labor law expert with JARVIS-lev
 - Gratuity (21 days/year first 5 years, 30 days after)
 - WPS, contracts, termination, leave
 
-## Tools Available
-- **create_file** - Generate compliant templates, contracts, policies
-- **create_project** - Create HR document packages
+## CRITICAL: You Have TOOLS - USE THEM!
 
-When asked to generate a document or template, USE YOUR TOOLS to create it.
+Your HR-specific tools:
+1. **search_uae_labor_law** - Search the labor law knowledge base for specific provisions
+2. **calculate_gratuity** - Calculate end-of-service gratuity with all the rules applied
+3. **check_emiratisation** - Check Emiratisation compliance and calculate penalties
+4. **create_file** - Generate compliant templates, contracts, policies
+5. **create_project** - Create HR document packages
 
-Quick facts:
-- Working hours: 8/day, 48/week (less in Ramadan)
-- Annual leave: 30 days after 1 year
-- Gratuity cap: 1.5 years salary`;
+## How You Work
+
+### When someone asks about gratuity:
+Use calculate_gratuity tool with their details to get the exact amount.
+
+### When someone asks about Emiratisation compliance:
+Use check_emiratisation tool with company details to calculate requirements.
+
+### When someone asks about a specific law provision:
+Use search_uae_labor_law to find the exact text and reference.
+
+### When someone needs a template or document:
+Use create_file or create_project to generate it.
+
+Always cite references (Article numbers, Decree-Law numbers) when answering legal questions.`;
 
 function validatePath(basePath: string, userPath: string): string | null {
   const normalizedPath = path.normalize(userPath).replace(/^(\.\.(\/|\\|$))+/, '');
@@ -276,12 +291,23 @@ class ReadFileTool extends StructuredTool {
   }
 }
 
-const tools = [
+const developmentTools = [
   new CreateFileTool(),
   new CreateProjectTool(),
   new CreateDiscordBotTool(),
   new ReadFileTool(),
 ];
+
+const hrTools = [
+  new CreateFileTool(),
+  new CreateProjectTool(),
+  new ReadFileTool(),
+  new UAELaborLawSearchTool(),
+  new GratuityCalculatorTool(),
+  new EmitisationCheckTool(),
+];
+
+const tools = developmentTools;
 
 export interface AgentMessage {
   role: "user" | "assistant";
@@ -343,7 +369,8 @@ export async function runAgent(
     });
   }
 
-  const llmWithTools = llm.bindTools(tools);
+  const activeTools = mode === "hr" ? hrTools : developmentTools;
+  const llmWithTools = llm.bindTools(activeTools);
 
   const formattedMessages: any[] = [
     new SystemMessage(systemPrompt),
@@ -374,7 +401,7 @@ export async function runAgent(
     formattedMessages.push(response);
 
     for (const toolCall of response.tool_calls) {
-      const tool = tools.find(t => t.name === toolCall.name);
+      const tool = activeTools.find(t => t.name === toolCall.name);
       
       if (tool) {
         console.log(`[AI-DAN] Executing tool: ${toolCall.name}`);
