@@ -53,10 +53,28 @@ Preferred communication style: Simple, everyday language.
 - JSON-based request/response format
 - Custom logging middleware for request tracking
 
-**AI Integration**:
-- OpenAI GPT-5 via Replit AI Integrations (no API key management required)
-- Mode-specific system prompts (DEV_SYSTEM_PROMPT vs HR_SYSTEM_PROMPT)
-- Streaming responses capability for real-time chat experience
+**AI Integration (LangChain Agent Framework)**:
+- LangChain.js for autonomous agent with tool-calling capabilities
+- Multi-provider support: OpenAI, Anthropic, OpenRouter via Replit AI Integrations
+- Mode-specific tool loading (Development vs HR mode)
+- JARVIS-like personality with witty, helpful responses
+
+**Development Mode Tools** (`server/agent/index.ts`):
+- `create_file` - Create single code/text files (path-validated to `generated/` folder)
+- `create_project` - Create multi-file projects with directory structure
+- `create_discord_bot` - Generate complete Discord bot projects with commands
+- `read_file` - Read existing project files
+
+**HR Mode Tools** (`server/agent/tools/uae-law-rag.ts`):
+- `search_uae_labor_law` - Search 15+ law sections from Federal Decree-Law No. 33/2021
+- `calculate_gratuity` - Calculate end-of-service gratuity with all reduction rules
+- `check_emiratisation` - Check compliance and calculate penalties (2024-2026 targets)
+- Plus: `create_file`, `create_project`, `read_file` for document generation
+
+**External Integrations** (via Replit Connectors):
+- GitHub (`server/agent/tools/github.ts`) - Create repos, push files using OAuth
+- Notion (`server/agent/tools/notion.ts`) - Create pages, generate documentation
+- Discord (`server/agent/tools/discord.ts`) - Discord.js bot templates
 
 **Session Management**: 
 - In-memory storage implementation (MemStorage class)
