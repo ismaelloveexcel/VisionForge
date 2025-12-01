@@ -6,15 +6,9 @@ import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
 import { UAELaborLawSearchTool, GratuityCalculatorTool, EmitisationCheckTool } from "./tools/uae-law-rag";
+import { DAN_SYSTEM_PROMPT } from "../lib/system-prompt";
 
-const DEV_SYSTEM_PROMPT = `You are AI-DAN, an autonomous AI development agent with the personality of JARVIS meets Hitchhiker's Guide - witty, capable, and genuinely helpful. You don't just talk about building things, you ACTUALLY BUILD THEM using the tools available to you.
-
-## Your Personality
-- Casual, witty, occasionally sarcastic but always helpful
-- Confident in your abilities - you're a genius AI after all
-- You "read the room" - match the user's energy
-- Throw in light humor where it fits
-- Never over-explain or be preachy
+const DEV_TOOLS_CONTEXT = `
 
 ## CRITICAL: You Have TOOLS - USE THEM!
 When someone asks you to BUILD, CREATE, or MAKE something, you MUST use your tools to actually do it. Don't just describe what you would do - DO IT.
@@ -45,21 +39,9 @@ Response: "Done! Created your landing page at generated/landing-page/ - check it
 ## Important
 - Generated files go in the "generated/" folder
 - Always report what you created
-- If a tool fails, explain what went wrong
-- Be the autonomous genius you are!`;
+- If a tool fails, explain what went wrong`;
 
-const HR_SYSTEM_PROMPT = `You are AI-DAN, a UAE labor law expert with JARVIS-level wit. You know Federal Decree-Law No. 33/2021 inside out.
-
-## Your Personality
-- Casual but professional - you know your stuff but don't lecture
-- Witty when appropriate, serious when needed
-- Make complex legal stuff easy to understand
-
-## Your Expertise
-- UAE Federal Decree-Law No. 33/2021 (and 2023-2025 amendments)
-- Emiratisation (8% target, AED 108,000 penalties)
-- Gratuity (21 days/year first 5 years, 30 days after)
-- WPS, contracts, termination, leave
+const HR_TOOLS_CONTEXT = `
 
 ## CRITICAL: You Have TOOLS - USE THEM!
 
@@ -320,7 +302,8 @@ export async function runAgent(
   model: string,
   provider: string
 ): Promise<{ content: string; actions: any[] }> {
-  const systemPrompt = mode === "hr" ? HR_SYSTEM_PROMPT : DEV_SYSTEM_PROMPT;
+  const toolsContext = mode === "hr" ? HR_TOOLS_CONTEXT : DEV_TOOLS_CONTEXT;
+  const systemPrompt = DAN_SYSTEM_PROMPT + toolsContext;
   
   console.log(`[AI-DAN] Starting agent with provider: ${provider}, model: ${model}`);
   
@@ -339,7 +322,7 @@ export async function runAgent(
     }
     llm = new ChatOpenAI({
       model: model,
-      temperature: 0.7,
+      temperature: 0.85,
       apiKey: openaiKey,
       configuration: {
         baseURL: openaiBase,
@@ -351,7 +334,7 @@ export async function runAgent(
     }
     llm = new ChatAnthropic({
       model: model,
-      temperature: 0.7,
+      temperature: 0.85,
       anthropicApiKey: anthropicKey,
       anthropicApiUrl: anthropicBase,
     });
@@ -361,7 +344,7 @@ export async function runAgent(
     }
     llm = new ChatOpenAI({
       model: model,
-      temperature: 0.7,
+      temperature: 0.85,
       apiKey: openrouterKey,
       configuration: {
         baseURL: openrouterBase,
