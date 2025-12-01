@@ -1,11 +1,50 @@
 import { Tool } from "@langchain/core/tools";
 import { Client } from "@notionhq/client";
 
-const getNotionClient = () => {
-  const token = process.env.NOTION_API_KEY;
-  if (!token) {
-    throw new Error("NOTION_API_KEY not configured. Please add your Notion API key to secrets.");
+let connectionSettings: any;
+
+async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings?.expires_at && 
+      new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
   }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken) {
+    throw new Error('Notion integration not available in this environment');
+  }
+
+  try {
+    connectionSettings = await fetch(
+      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=notion',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      }
+    ).then(res => res.json()).then(data => data.items?.[0]);
+  } catch (error) {
+    throw new Error('Failed to fetch Notion connection settings');
+  }
+
+  const accessToken = connectionSettings?.settings?.access_token || 
+                      connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+  if (!connectionSettings || !accessToken) {
+    throw new Error('Notion not connected - please connect Notion in your Replit settings');
+  }
+  return accessToken;
+}
+
+const getNotionClient = async () => {
+  const token = await getAccessToken();
   return new Client({ auth: token });
 };
 
@@ -30,7 +69,7 @@ Example: {"parentId": "abc123", "title": "Project Docs", "content": [{"type": "h
         });
       }
 
-      const notion = getNotionClient();
+      const notion = await getNotionClient();
 
       const children = content.map((block: { type: string; text: string; language?: string }) => {
         const blockType = block.type || "paragraph";
@@ -113,7 +152,7 @@ Example: {"query": "project roadmap", "limit": 5}`;
         return JSON.stringify({ success: false, error: "Query is required" });
       }
 
-      const notion = getNotionClient();
+      const notion = await getNotionClient();
 
       const response = await notion.search({
         query,
@@ -168,7 +207,7 @@ Example: {"parentId": "abc123", "projectName": "My App", "description": "A task 
         });
       }
 
-      const notion = getNotionClient();
+      const notion = await getNotionClient();
 
       const children: any[] = [
         {

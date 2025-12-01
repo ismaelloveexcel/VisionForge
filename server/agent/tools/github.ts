@@ -3,11 +3,50 @@ import { Octokit } from "@octokit/rest";
 import * as fs from "fs";
 import * as path from "path";
 
-const getOctokit = () => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    throw new Error("GITHUB_TOKEN not configured. Please add your GitHub token to secrets.");
+let connectionSettings: any;
+
+async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings?.expires_at && 
+      new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
   }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken) {
+    throw new Error('GitHub integration not available in this environment');
+  }
+
+  try {
+    connectionSettings = await fetch(
+      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=github',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      }
+    ).then(res => res.json()).then(data => data.items?.[0]);
+  } catch (error) {
+    throw new Error('Failed to fetch GitHub connection settings');
+  }
+
+  const accessToken = connectionSettings?.settings?.access_token || 
+                      connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+  if (!connectionSettings || !accessToken) {
+    throw new Error('GitHub not connected - please connect GitHub in your Replit settings');
+  }
+  return accessToken;
+}
+
+const getOctokit = async () => {
+  const token = await getAccessToken();
   return new Octokit({ auth: token });
 };
 
@@ -29,7 +68,7 @@ Example: {"name": "my-awesome-app", "description": "A cool app built by AI-DAN",
         return JSON.stringify({ success: false, error: "Repository name is required" });
       }
 
-      const octokit = getOctokit();
+      const octokit = await getOctokit();
       
       const response = await octokit.repos.createForAuthenticatedUser({
         name,
@@ -77,7 +116,7 @@ Example: {"owner": "username", "repo": "my-app", "files": [{"path": "index.html"
         });
       }
 
-      const octokit = getOctokit();
+      const octokit = await getOctokit();
 
       let sha: string | undefined;
       try {
@@ -168,7 +207,7 @@ Example: {"type": "owner", "limit": 5}`;
       const parsed = JSON.parse(input);
       const { type = "owner", sort = "updated", limit = 10 } = parsed;
 
-      const octokit = getOctokit();
+      const octokit = await getOctokit();
       
       const { data: repos } = await octokit.repos.listForAuthenticatedUser({
         type: type as "all" | "owner" | "member",
