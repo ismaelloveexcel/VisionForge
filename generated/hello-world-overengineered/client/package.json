@@ -1,0 +1,1 @@
+{\n    "name": "hello-world-client",\n    "version": "1.0.0",\n    "dependencies": {\n        "react": "^17.0.2",\n        "react-dom": "^17.0.2",\n        "react-scripts": "^4.0.3"\n    },\n    "scripts": {\n        "start": "react-scripts start"\n    }\n}
