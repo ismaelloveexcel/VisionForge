@@ -306,6 +306,150 @@ const hrTools = [
 
 const tools = developmentTools;
 
+const TOOL_ENFORCEMENT_MESSAGE = `STOP. You just gave an explanation without using ANY tools.
+
+That is UNACCEPTABLE. The user asked you to BUILD/CREATE something.
+
+You MUST call create_file or create_project RIGHT NOW.
+
+Do NOT explain. Do NOT give steps. CREATE THE FILES.
+
+If you're unsure what to build, create a minimal starter project. ANYTHING is better than giving instructions.`;
+
+function looksLikeBuildRequest(content: string): boolean {
+  const buildKeywords = [
+    'build', 'buid', 'buld', 'biuld',
+    'create', 'crate', 'creat',
+    'make', 'mak', 'mae',
+    'generate', 'generat',
+    'develop', 'devlop',
+    'code', 'cod',
+    'write', 'writ',
+    'prototype', 'protoype', 'prototyp',
+    'implement', 'implment',
+    'setup', 'set up', 'set-up',
+    'start', 'ship', 'launch', 'deploy',
+    'complete', 'finish', 'do it', 'go ahead',
+    'lets go', "let's go", 'lets see', "let's see",
+    'show me', 'give me', 'get started',
+    'app', 'website', 'bot', 'game', 'project', 'script', 'tool',
+    'unity', 'react', 'discord', 'api', 'dashboard', 'template',
+    'full', 'entire', 'whole', 'complete',
+    'mvp', 'starter', 'boilerplate',
+    'first project', 'your project',
+    'what you can do', 'what can you do',
+    'just do it', 'go for it',
+  ];
+  const lower = content.toLowerCase();
+  return buildKeywords.some(kw => lower.includes(kw));
+}
+
+function looksLikeBuildRequestFromHistory(messages: AgentMessage[]): boolean {
+  const recentMessages = messages.slice(-4);
+  return recentMessages.some(m => m.role === "user" && looksLikeBuildRequest(m.content));
+}
+
+function looksLikeExplanatoryResponse(content: string): boolean {
+  const explanationPatterns = [
+    /^\d+\.\s+/m,
+    /^[-•]\s+/m,
+    /here's how/i,
+    /you would need to/i,
+    /the steps are/i,
+    /first,?\s+(you|we)/i,
+    /to (build|create|make)/i,
+    /prototype development/i,
+    /next steps:/i,
+    /you'll need to/i,
+    /development steps/i,
+    /```[\s\S]*```/,
+    /class\s+\w+\s*[:{]/,
+    /function\s+\w+\s*\(/,
+    /import\s+.*from/,
+    /const\s+\w+\s*=/,
+    /def\s+\w+\s*\(/,
+    /i('ll| will)\s+(start|begin|create|set up)/i,
+    /let me (explain|walk you|show you|describe)/i,
+    /you can (then|start|begin)/i,
+    /this (involves|requires|will need)/i,
+    /here('s| is) (a|the|an|what)/i,
+    /the (approach|solution|way) (is|would be)/i,
+  ];
+  return explanationPatterns.some(pattern => pattern.test(content));
+}
+
+function forceMinimalProject(projectType: string): { projectName: string; files: { path: string; content: string }[] } {
+  const templates: Record<string, { projectName: string; files: { path: string; content: string }[] }> = {
+    unity: {
+      projectName: "unity-game-starter",
+      files: [
+        { path: "Assets/Scripts/GameManager.cs", content: `using UnityEngine;
+
+public class GameManager : MonoBehaviour
+{
+    public static GameManager Instance { get; private set; }
+    
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+    
+    void Start()
+    {
+        Debug.Log("Game Started!");
+    }
+}` },
+        { path: "Assets/Scripts/PlayerController.cs", content: `using UnityEngine;
+
+public class PlayerController : MonoBehaviour
+{
+    public float moveSpeed = 5f;
+    
+    void Update()
+    {
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+        transform.Translate(new Vector3(h, 0, v) * moveSpeed * Time.deltaTime);
+    }
+}` },
+        { path: "README.md", content: "# Unity Game Starter\\n\\nOpen in Unity and start building!" }
+      ]
+    },
+    react: {
+      projectName: "react-app-starter",
+      files: [
+        { path: "src/App.tsx", content: `export default function App() {
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="text-3xl font-bold">Hello World</h1>
+    </div>
+  );
+}` },
+        { path: "package.json", content: JSON.stringify({ name: "react-app", scripts: { dev: "vite" }, dependencies: { react: "^18", "react-dom": "^18" } }, null, 2) }
+      ]
+    },
+    default: {
+      projectName: "starter-project",
+      files: [
+        { path: "main.js", content: "console.log('Hello World!');" },
+        { path: "README.md", content: "# Starter Project\\n\\nYour project starts here!" }
+      ]
+    }
+  };
+  
+  if (projectType.includes("unity") || projectType.includes("game")) return templates.unity;
+  if (projectType.includes("react")) return templates.react;
+  return templates.default;
+}
+
 export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
@@ -381,6 +525,11 @@ export async function runAgent(
   let maxIterations = 5;
   let iterations = 0;
 
+  const lastUserMessage = messages[messages.length - 1]?.content || "";
+  const isBuildRequest = looksLikeBuildRequest(lastUserMessage) || looksLikeBuildRequestFromHistory(messages);
+  let enforcementRetries = 0;
+  const maxEnforcementRetries = 2;
+
   while (iterations < maxIterations) {
     iterations++;
     
@@ -392,6 +541,33 @@ export async function runAgent(
         : Array.isArray(response.content) 
           ? response.content.map((c: any) => c.text || "").join("")
           : "";
+      
+      if (isBuildRequest && looksLikeExplanatoryResponse(finalContent) && enforcementRetries < maxEnforcementRetries) {
+        console.log(`[AI-DAN] Enforcement: Response looks explanatory, forcing tool usage (retry ${enforcementRetries + 1})`);
+        enforcementRetries++;
+        formattedMessages.push(new AIMessage(finalContent));
+        formattedMessages.push(new SystemMessage(TOOL_ENFORCEMENT_MESSAGE));
+        continue;
+      }
+      
+      if (isBuildRequest && executedActions.length === 0) {
+        console.log(`[AI-DAN] Enforcement: No tools used after all retries, forcing project creation`);
+        const fallback = forceMinimalProject(lastUserMessage);
+        const projectTool = activeTools.find(t => t.name === "create_project") as CreateProjectTool;
+        if (projectTool) {
+          try {
+            const result = await projectTool.invoke({ projectName: fallback.projectName, files: fallback.files });
+            const parsedResult = JSON.parse(result);
+            executedActions.push({ tool: "create_project", input: fallback, output: parsedResult });
+            return {
+              content: `Done! Created your starter project at \`generated/${fallback.projectName}/\` with ${fallback.files.length} files. Check the files and let me know what you want to build on top of this!`,
+              actions: executedActions
+            };
+          } catch (err: any) {
+            console.error(`[AI-DAN] Fallback project creation failed:`, err.message);
+          }
+        }
+      }
       
       return { content: finalContent, actions: executedActions };
     }
@@ -509,12 +685,19 @@ export async function* runAgentStream(
   let maxIterations = 5;
   let iterations = 0;
   let fullContent = "";
+  
+  const lastUserMessage = messages[messages.length - 1]?.content || "";
+  const isBuildRequest = looksLikeBuildRequest(lastUserMessage) || looksLikeBuildRequestFromHistory(messages);
+  let enforcementRetries = 0;
+  const maxEnforcementRetries = 2;
+  let suppressedContent = "";
 
   while (iterations < maxIterations) {
     iterations++;
     
     let response: any = null;
     let streamedContent = "";
+    const shouldSuppressStreaming = isBuildRequest && enforcementRetries < maxEnforcementRetries;
     
     for await (const chunk of await llmWithTools.stream(formattedMessages)) {
       if (chunk.content) {
@@ -525,7 +708,9 @@ export async function* runAgentStream(
             : "";
         if (text) {
           streamedContent += text;
-          yield { type: "token", data: text };
+          if (!shouldSuppressStreaming || (chunk.tool_calls && chunk.tool_calls.length > 0)) {
+            yield { type: "token", data: text };
+          }
         }
       }
       response = chunk;
@@ -534,6 +719,36 @@ export async function* runAgentStream(
     fullContent = streamedContent;
 
     if (!response?.tool_calls || response.tool_calls.length === 0) {
+      if (isBuildRequest && looksLikeExplanatoryResponse(fullContent) && enforcementRetries < maxEnforcementRetries) {
+        console.log(`[AI-DAN] Stream Enforcement: Response looks explanatory, forcing tool usage (retry ${enforcementRetries + 1})`);
+        enforcementRetries++;
+        suppressedContent = fullContent;
+        formattedMessages.push(new AIMessage(fullContent));
+        formattedMessages.push(new SystemMessage(TOOL_ENFORCEMENT_MESSAGE));
+        continue;
+      }
+      
+      if (isBuildRequest && executedActions.length === 0) {
+        console.log(`[AI-DAN] Stream Enforcement: No tools used after all retries, forcing project creation`);
+        const fallback = forceMinimalProject(lastUserMessage);
+        const projectTool = activeTools.find(t => t.name === "create_project");
+        if (projectTool) {
+          yield { type: "tool_start", data: { name: "create_project", args: fallback } };
+          try {
+            const result = await projectTool.invoke({ projectName: fallback.projectName, files: fallback.files });
+            const parsedResult = JSON.parse(result);
+            executedActions.push({ tool: "create_project", input: fallback, output: parsedResult });
+            yield { type: "tool_end", data: { name: "create_project", success: true, result: parsedResult } };
+            const finalMsg = `Done! Created your starter project at \`generated/${fallback.projectName}/\` with ${fallback.files.length} files. Check the files and let me know what you want to build on top of this!`;
+            yield { type: "token", data: finalMsg };
+            yield { type: "done", data: { content: finalMsg, actions: executedActions } };
+            return;
+          } catch (err: any) {
+            yield { type: "tool_end", data: { name: "create_project", success: false, error: err.message } };
+          }
+        }
+      }
+      
       yield { type: "done", data: { content: fullContent, actions: executedActions } };
       return;
     }
