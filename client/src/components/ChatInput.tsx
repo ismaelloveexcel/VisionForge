@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { Send, Paperclip, Sparkles } from "lucide-react";
+import { Send, Paperclip, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -8,12 +8,14 @@ interface ChatInputProps {
   onSend: (message: string) => void;
   isLoading?: boolean;
   placeholder?: string;
+  onStop?: () => void;
 }
 
 export function ChatInput({
   onSend,
   isLoading = false,
   placeholder = "Describe your idea or ask AI-DAN anything...",
+  onStop,
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -79,28 +81,39 @@ export function ChatInput({
           data-testid="input-chat"
         />
         <div className="flex shrink-0 gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            data-testid="button-suggestions"
-          >
-            <Sparkles className="h-4 w-4" />
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                onClick={handleSend}
-                disabled={!message.trim() || isLoading}
-                data-testid="button-send"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p>{isMac ? "⌘" : "Ctrl"}+Enter or Enter to send</p>
-            </TooltipContent>
-          </Tooltip>
+          {isLoading && onStop ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  onClick={onStop}
+                  data-testid="button-stop"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Stop generating</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={!message.trim() || isLoading}
+                  data-testid="button-send"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{isMac ? "⌘" : "Ctrl"}+Enter or Enter to send</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
       <div className="flex justify-end">

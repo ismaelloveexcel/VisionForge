@@ -10,15 +10,15 @@ interface WelcomeCardProps {
 }
 
 const devActions = [
-  { icon: Code2, label: "Build an App", prompt: "I want to build a new application" },
-  { icon: Rocket, label: "Create Discord Bot", prompt: "Create a Discord bot for me" },
-  { icon: Sparkles, label: "Generate API", prompt: "Generate a REST API" },
+  { icon: Code2, label: "Hello World App", prompt: "Build me a simple hello world web page with some interactivity" },
+  { icon: Rocket, label: "Discord Bot", prompt: "Create a Discord bot with ping and help commands" },
+  { icon: Sparkles, label: "Landing Page", prompt: "Build a modern landing page for a SaaS product" },
 ];
 
 const hrActions = [
-  { icon: Users, label: "Check Compliance", prompt: "Review my HR compliance" },
-  { icon: Sparkles, label: "Calculate Gratuity", prompt: "Calculate end of service gratuity" },
-  { icon: Code2, label: "Draft Contract", prompt: "Help me draft an employment contract" },
+  { icon: Users, label: "Emiratisation Check", prompt: "I have 75 employees. Check my Emiratisation compliance for 2025" },
+  { icon: Sparkles, label: "Gratuity Calculator", prompt: "Calculate gratuity for someone earning 15,000 AED with 4 years service who resigned" },
+  { icon: Code2, label: "Employment Contract", prompt: "Generate an employment contract template compliant with UAE labor law" },
 ];
 
 export function WelcomeCard({ mode, onQuickAction }: WelcomeCardProps) {

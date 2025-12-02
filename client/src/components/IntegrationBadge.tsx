@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface IntegrationBadgeProps {
   name: "github" | "discord" | "notion";
-  status: "connected" | "disconnected" | "syncing";
+  status: "connected" | "available" | "setup-required";
 }
 
 const icons = {
@@ -32,10 +32,10 @@ export function IntegrationBadge({ name, status }: IntegrationBadgeProps) {
       <span
         className={`h-1.5 w-1.5 rounded-full ${
           status === "connected"
-            ? "bg-status-online"
-            : status === "syncing"
-              ? "bg-status-away animate-pulse"
-              : "bg-status-offline"
+            ? "bg-green-500"
+            : status === "available"
+              ? "bg-blue-400"
+              : "bg-amber-500"
         }`}
       />
     </Badge>

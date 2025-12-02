@@ -114,10 +114,13 @@ export function AppSidebar({ mode }: AppSidebarProps) {
               <CollapsibleContent>
                 <SidebarGroupContent className="px-2 py-2">
                   <div className="flex flex-wrap gap-1.5">
-                    <IntegrationBadge name="github" status="connected" />
-                    <IntegrationBadge name="discord" status="connected" />
-                    <IntegrationBadge name="notion" status="connected" />
+                    <IntegrationBadge name="github" status="available" />
+                    <IntegrationBadge name="discord" status="available" />
+                    <IntegrationBadge name="notion" status="available" />
                   </div>
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    AI-DAN can use these when generating projects
+                  </p>
                 </SidebarGroupContent>
               </CollapsibleContent>
             </SidebarGroup>

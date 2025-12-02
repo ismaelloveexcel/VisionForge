@@ -31,6 +31,9 @@ interface Message {
 interface HomeProps {
   mode: "development" | "hr";
   model: string;
+  onClearChat?: () => void;
+  isLoading?: boolean;
+  setIsLoading?: (loading: boolean) => void;
 }
 
 const modelDisplayNames: Record<string, string> = {
@@ -45,7 +48,7 @@ const modelDisplayNames: Record<string, string> = {
   "x-ai/grok-3-mini": "Grok 3 Mini",
 };
 
-export default function Home({ mode, model }: HomeProps) {
+export default function Home({ mode, model, onClearChat, setIsLoading }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [rightTab, setRightTab] = useState<string>(
     mode === "development" ? "code" : "tools"
@@ -55,6 +58,8 @@ export default function Home({ mode, model }: HomeProps) {
   const [streamingContent, setStreamingContent] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const streamingContentRef = useRef<string>("");
 
   const { data: historyData } = useQuery<{ messages: Message[] }>({
     queryKey: ["/api/chat/history"],
@@ -103,14 +108,19 @@ export default function Home({ mode, model }: HomeProps) {
     ];
 
     setIsStreaming(true);
+    setIsLoading?.(true);
     setStreamingContent("");
+    streamingContentRef.current = "";
     setCurrentToolCalls([]);
+
+    abortControllerRef.current = new AbortController();
 
     try {
       const response = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: allMessages, mode, model }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -146,6 +156,7 @@ export default function Home({ mode, model }: HomeProps) {
               if (event.type === "token") {
                 fullContent += event.data;
                 setStreamingContent(fullContent);
+                streamingContentRef.current = fullContent;
               } else if (event.type === "tool_start") {
                 const newTool: ToolCall = { name: event.data.name, status: "running" };
                 toolCalls.push(newTool);
@@ -191,21 +202,51 @@ export default function Home({ mode, model }: HomeProps) {
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/generated"] });
-    } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Oops! I ran into a hiccup. Could you try asking me again?",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        const partialContent = streamingContentRef.current;
+        if (partialContent) {
+          const partialMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: partialContent + "\n\n*[Response stopped]*",
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            modelName: modelDisplayNames[model] || model,
+          };
+          setMessages((prev) => {
+            const updated = [...prev, partialMessage];
+            saveHistory(updated);
+            return updated;
+          });
+        }
+      } else {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Oops! I ran into a hiccup. Could you try asking me again?",
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      }
     } finally {
       setIsStreaming(false);
+      setIsLoading?.(false);
       setStreamingContent("");
+      streamingContentRef.current = "";
       setCurrentToolCalls([]);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -284,6 +325,7 @@ export default function Home({ mode, model }: HomeProps) {
           <ChatInput
             onSend={handleSend}
             isLoading={isStreaming}
+            onStop={handleStop}
             placeholder={
               mode === "development"
                 ? "Describe your app idea or ask AI-DAN to build something..."
