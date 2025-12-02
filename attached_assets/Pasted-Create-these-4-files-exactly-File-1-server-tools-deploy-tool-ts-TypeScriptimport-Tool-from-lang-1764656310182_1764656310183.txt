@@ -1,0 +1,95 @@
+Create these 4 files exactly
+File 1 server/tools/deploy-tool.ts
+TypeScriptimport { Tool } from "langchain/tools";
+
+export class DeployAppTool extends Tool {
+  name = "deploy_app_live";
+  description = "Deploys a complete app on a brand-new public Replit and returns the live URL instantly.";
+
+  async _call(input: string) {
+    const { title = "AI-DAN creation", files } = JSON.parse(input);
+
+    const res = await fetch("https://replit.com/api/v0/repls", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.REPLIT_TOKEN}`,
+      },
+      body: JSON.stringify({ language: "nodejs", title, isPublic: true, files }),
+    });
+
+    if (!res.ok) return `Deploy failed: ${await res.text()}`;
+
+    const data = await res.json();
+    return `Deployed and live right now → https://${data.slug}--${data.ownerUsername}.repl.co`;
+  }
+}
+File 2 server/tools/file-tool.ts
+TypeScriptimport fs from "fs/promises";
+import { Tool } from "langchain/tools";
+
+export class WriteFileTool extends Tool {
+  name = "write_file";
+  description = "Writes or overwrites a file on disk. Path is relative to project root.";
+
+  async _call(input: string) {
+    const { path, content } = JSON.parse(input);
+    try {
+      await fs.mkdir(require("path").dirname(path), { recursive: true });
+      await fs.writeFile(path, content, "utf-8");
+      return `File written: ${path}`;
+    } catch (e: any) {
+      return `Write failed: ${e.message}`;
+    }
+  }
+}
+File 3 server/tools/shell-tool.ts
+TypeScriptimport { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
+
+import { Tool } from "langchain/tools";
+
+export class ShellTool extends Tool {
+  name = "run_command";
+  description = "Runs any shell/terminal command in the Replit environment (git, npm, etc).";
+
+  async _call(command: string) {
+    try {
+      const { stdout, stderr } = await execAsync(command, { timeout: 30000 });
+      return stderr ? `Error: ${stderr}` : stdout || "Command ran successfully";
+    } catch (e: any) {
+      return `Command failed: ${e.message}`;
+    }
+  }
+}
+File 4 server/lib/memory.ts (so it never forgets)
+TypeScriptimport { db } from "../db"; // your existing drizzle instance
+import { conversations } from "../db/schema";
+
+export async function saveChat(userId: string, messages: any[]) {
+  await db.insert(conversations).values({
+    userId,
+    messages: JSON.stringify(messages),
+    updatedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: conversations.userId,
+    set: { messages: JSON.stringify(messages), updatedAt: new Date() }
+  });
+}
+
+export async function loadChat(userId: string) {
+  const row = await db.select().from(conversations).where(eq(conversations.userId, userId)).limit(1);
+  return row[0] ? JSON.parse(row[0].messages) : [];
+}
+3. One-line change in your agent file (the money shot)
+Open server/agent/index.ts (or wherever you create the agent) and change the tools array to:
+TypeScriptimport { DeployAppTool } from "../tools/deploy-tool";
+import { WriteFileTool } from "../tools/file-tool";
+import { ShellTool } from "../tools/shell-tool";
+
+const tools = [
+  new DeployAppTool(),
+  new WriteFileTool(),
+  new ShellTool(),
+  // keep any other tools you already have

@@ -7,6 +7,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { UAELaborLawSearchTool, GratuityCalculatorTool, EmitisationCheckTool } from "./tools/uae-law-rag";
 import { DAN_SYSTEM_PROMPT } from "../lib/system-prompt";
+import { DeployAppTool } from "../tools/deploy-tool";
+import { WriteFileTool } from "../tools/file-tool";
+import { ShellTool } from "../tools/shell-tool";
 
 const DEV_TOOLS_CONTEXT = `
 
@@ -14,10 +17,13 @@ const DEV_TOOLS_CONTEXT = `
 When someone asks you to BUILD, CREATE, or MAKE something, you MUST use your tools to actually do it. Don't just describe what you would do - DO IT.
 
 Your tools:
-1. **create_file** - Create a single code/text file
+1. **create_file** - Create a single code/text file in generated/ folder
 2. **create_project** - Create an entire project with multiple files
 3. **create_discord_bot** - Generate a complete Discord bot
-4. **read_file** - Read existing project files
+4. **write_file** - Write/overwrite any file on disk (use for edits outside generated/)
+5. **read_file** - Read existing project files
+6. **run_command** - Run any shell command (git, npm, curl, etc.)
+7. **deploy_app_live** - Deploy an app to a new public Replit with a live URL instantly
 
 ## How You Work
 
@@ -26,10 +32,11 @@ Your tools:
 2. IMMEDIATELY call the appropriate tool to create it
 3. Tell them what you created and where to find it
 
-Example:
-User: "Build me a landing page"
-You: *Call create_project with HTML/CSS/JS files*
-Response: "Done! Created your landing page at generated/landing-page/ - check it out!"
+### When someone wants to DEPLOY:
+Use deploy_app_live with the files object to get a live URL in seconds.
+
+### When someone needs to run commands:
+Use run_command for git, npm install, curl, or any terminal stuff.
 
 ### When someone is just chatting or asking questions:
 - Have a normal conversation
@@ -39,7 +46,8 @@ Response: "Done! Created your landing page at generated/landing-page/ - check it
 ## Important
 - Generated files go in the "generated/" folder
 - Always report what you created
-- If a tool fails, explain what went wrong`;
+- If a tool fails, explain what went wrong
+- You can chain tools: create → deploy → share URL`;
 
 const HR_TOOLS_CONTEXT = `
 
@@ -277,13 +285,18 @@ const developmentTools = [
   new CreateFileTool(),
   new CreateProjectTool(),
   new CreateDiscordBotTool(),
+  new WriteFileTool(),
   new ReadFileTool(),
+  new ShellTool(),
+  new DeployAppTool(),
 ];
 
 const hrTools = [
   new CreateFileTool(),
   new CreateProjectTool(),
+  new WriteFileTool(),
   new ReadFileTool(),
+  new ShellTool(),
   new UAELaborLawSearchTool(),
   new GratuityCalculatorTool(),
   new EmitisationCheckTool(),
