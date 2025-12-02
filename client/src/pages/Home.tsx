@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
@@ -13,12 +13,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Code2, FileText, Activity, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface ToolCall {
+  name: string;
+  status: "running" | "completed" | "failed";
+  result?: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
   modelName?: string;
+  toolCalls?: ToolCall[];
 }
 
 interface HomeProps {
@@ -26,44 +33,165 @@ interface HomeProps {
   model: string;
 }
 
+const modelDisplayNames: Record<string, string> = {
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o Mini",
+  "claude-sonnet-4-5": "Claude Sonnet",
+  "claude-haiku-4-5": "Claude Haiku",
+  "claude-opus-4-1": "Claude Opus",
+  "deepseek/deepseek-chat-v3.1": "DeepSeek V3.1",
+  "deepseek/deepseek-r1-0528": "DeepSeek R1",
+  "x-ai/grok-4.1-fast:free": "Grok 4.1",
+  "x-ai/grok-3-mini": "Grok 3 Mini",
+};
+
 export default function Home({ mode, model }: HomeProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedFile, setSelectedFile] = useState("src/App.tsx");
   const [rightTab, setRightTab] = useState<string>(
     mode === "development" ? "code" : "tools"
   );
+  const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
-  const chatMutation = useMutation({
-    mutationFn: async (newMessages: { role: string; content: string }[]) => {
-      const response = await apiRequest("POST", "/api/chat", { messages: newMessages, mode, model });
-      return response.json() as Promise<{ content: string; model?: string }>;
-    },
-    onSuccess: (data) => {
-      const modelDisplayNames: Record<string, string> = {
-        "gpt-4o": "GPT-4o",
-        "gpt-4o-mini": "GPT-4o Mini",
-        "claude-sonnet-4-5": "Claude Sonnet",
-        "claude-haiku-4-5": "Claude Haiku",
-        "claude-opus-4-1": "Claude Opus",
-        "deepseek/deepseek-chat-v3.1": "DeepSeek V3.1",
-        "deepseek/deepseek-r1-0528": "DeepSeek R1",
-        "x-ai/grok-4.1-fast:free": "Grok 4.1",
-        "x-ai/grok-3-mini": "Grok 3 Mini",
-      };
+  const { data: historyData } = useQuery<{ messages: Message[] }>({
+    queryKey: ["/api/chat/history"],
+  });
+
+  useEffect(() => {
+    if (historyData?.messages && messages.length === 0) {
+      setMessages(historyData.messages);
+    }
+  }, [historyData]);
+
+  const saveHistory = async (msgs: Message[]) => {
+    try {
+      await apiRequest("POST", "/api/chat/history", { messages: msgs });
+    } catch {}
+  };
+
+  useEffect(() => {
+    setRightTab(mode === "development" ? "code" : "tools");
+  }, [mode]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isStreaming, streamingContent]);
+
+  const handleSend = async (content: string) => {
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+    
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    saveHistory(updatedMessages);
+
+    const allMessages = [
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content },
+    ];
+
+    setIsStreaming(true);
+    setStreamingContent("");
+    setCurrentToolCalls([]);
+
+    try {
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: allMessages, mode, model }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error("No response body available");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      const toolCalls: ToolCall[] = [];
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]" || !data) continue;
+
+            try {
+              const event = JSON.parse(data);
+              
+              if (event.type === "token") {
+                fullContent += event.data;
+                setStreamingContent(fullContent);
+              } else if (event.type === "tool_start") {
+                const newTool: ToolCall = { name: event.data.name, status: "running" };
+                toolCalls.push(newTool);
+                setCurrentToolCalls([...toolCalls]);
+              } else if (event.type === "tool_end") {
+                const idx = toolCalls.findIndex(t => t.name === event.data.name && t.status === "running");
+                if (idx !== -1) {
+                  toolCalls[idx] = {
+                    name: event.data.name,
+                    status: event.data.success ? "completed" : "failed",
+                    result: event.data.result?.message || event.data.error,
+                  };
+                  setCurrentToolCalls([...toolCalls]);
+                }
+              } else if (event.type === "done") {
+                fullContent = event.data.content || fullContent;
+              } else if (event.type === "error") {
+                throw new Error(event.data || "Stream error");
+              }
+            } catch (parseError) {
+              console.warn("SSE parse error:", parseError);
+            }
+          }
+        }
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.content,
+        content: fullContent,
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        modelName: modelDisplayNames[data.model || model] || model,
+        modelName: modelDisplayNames[model] || model,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
-      setMessages((prev) => [...prev, aiMessage]);
-    },
-    onError: () => {
+
+      setMessages((prev) => {
+        const updated = [...prev, aiMessage];
+        saveHistory(updated);
+        return updated;
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/generated"] });
+    } catch (error) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -74,139 +202,40 @@ export default function Home({ mode, model }: HomeProps) {
         }),
       };
       setMessages((prev) => [...prev, errorMessage]);
-    },
-  });
-
-  useEffect(() => {
-    setRightTab(mode === "development" ? "code" : "tools");
-  }, [mode]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    } finally {
+      setIsStreaming(false);
+      setStreamingContent("");
+      setCurrentToolCalls([]);
     }
-  }, [messages, chatMutation.isPending]);
-
-  const handleSend = (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-
-    const allMessages = [
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content },
-    ];
-    chatMutation.mutate(allMessages);
   };
 
   const handleQuickAction = (prompt: string) => {
     handleSend(prompt);
   };
 
-  const mockFiles = [
-    {
-      name: "src",
-      type: "folder" as const,
-      children: [
+  const handleClearChat = async () => {
+    setMessages([]);
+    try {
+      await apiRequest("DELETE", "/api/chat/history");
+    } catch {}
+  };
+
+  const mockProgress = isStreaming
+    ? [
         {
-          name: "App.tsx",
-          type: "file" as const,
-          content: `import { TaskList } from "./components/TaskList";
-import { AddTask } from "./components/AddTask";
-
-export default function App() {
-  return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">
-        Task Manager
-      </h1>
-      <AddTask onAdd={handleAddTask} />
-      <TaskList tasks={tasks} />
-    </div>
-  );
-}`,
+          action: "analyzing" as const,
+          title: "Processing Request",
+          description: "AI-DAN is thinking...",
+          status: "in-progress" as const,
         },
-        {
-          name: "components",
-          type: "folder" as const,
-          children: [
-            {
-              name: "TaskList.tsx",
-              type: "file" as const,
-              content: `interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
-export function TaskList({ tasks }: { tasks: Task[] }) {
-  return (
-    <ul className="space-y-2">
-      {tasks.map(task => (
-        <li key={task.id}>{task.title}</li>
-      ))}
-    </ul>
-  );
-}`,
-            },
-            {
-              name: "AddTask.tsx",
-              type: "file" as const,
-              content: `export function AddTask({ onAdd }) {
-  return (
-    <form onSubmit={handleSubmit}>
-      <input type="text" placeholder="Add task" />
-      <button type="submit">Add</button>
-    </form>
-  );
-}`,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: "package.json",
-      type: "file" as const,
-      content: `{
-  "name": "task-manager",
-  "version": "1.0.0",
-  "dependencies": {
-    "react": "^18.2.0",
-    "express": "^4.18.2"
-  }
-}`,
-    },
-  ];
-
-  const mockProgress = [
-    {
-      action: "analyzing" as const,
-      title: "Analyzing Requirements",
-      description: "Extracting features from description",
-      status: "completed" as const,
-    },
-    {
-      action: "coding" as const,
-      title: "Generating Frontend",
-      description: "Creating React components",
-      progress: 65,
-      status: "in-progress" as const,
-    },
-    {
-      action: "deploying" as const,
-      title: "Push to GitHub",
-      description: "Creating repository",
-      status: "pending" as const,
-    },
-  ];
+        ...(currentToolCalls.map((tc) => ({
+          action: "coding" as const,
+          title: tc.name,
+          description: tc.result || "Executing...",
+          status: tc.status === "running" ? "in-progress" as const : tc.status === "completed" ? "completed" as const : "pending" as const,
+        }))),
+      ]
+    : [];
 
   return (
     <div className="flex h-full gap-4 p-4">
@@ -223,11 +252,17 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                   content={msg.content}
                   timestamp={msg.timestamp}
                   modelName={msg.modelName}
+                  toolCalls={msg.toolCalls}
                 />
               ))
             )}
-            {chatMutation.isPending && (
-              <ChatMessage role="assistant" content="" isTyping />
+            {isStreaming && (
+              <ChatMessage 
+                role="assistant" 
+                content={streamingContent || ""} 
+                isTyping={!streamingContent}
+                toolCalls={currentToolCalls.length > 0 ? currentToolCalls : undefined}
+              />
             )}
           </div>
         </ScrollArea>
@@ -238,7 +273,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground gap-1.5"
-                onClick={() => setMessages([])}
+                onClick={handleClearChat}
                 data-testid="button-clear-chat"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -248,7 +283,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
           )}
           <ChatInput
             onSend={handleSend}
-            isLoading={chatMutation.isPending}
+            isLoading={isStreaming}
             placeholder={
               mode === "development"
                 ? "Describe your app idea or ask AI-DAN to build something..."
@@ -289,17 +324,22 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
           {mode === "development" ? (
             <>
               <TabsContent value="code" className="flex-1 mt-4 overflow-hidden">
-                <CodePreview
-                  files={mockFiles}
-                  selectedFile={selectedFile}
-                  onSelectFile={setSelectedFile}
-                />
+                <CodePreview />
               </TabsContent>
               <TabsContent value="progress" className="flex-1 mt-4 overflow-auto">
                 <div className="flex flex-col gap-3">
-                  {mockProgress.map((p) => (
-                    <ProgressCard key={p.action} {...p} />
-                  ))}
+                  {mockProgress.length > 0 ? (
+                    mockProgress.map((p, i) => (
+                      <ProgressCard key={`${p.action}-${i}`} {...p} />
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-32 text-center">
+                      <Activity className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        Tool activity will appear here when AI-DAN is working
+                      </p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </>

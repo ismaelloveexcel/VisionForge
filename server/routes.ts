@@ -1,7 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { runAgent } from "./agent";
+import { runAgent, runAgentStream } from "./agent";
+import * as fs from "fs";
+import * as path from "path";
+import { saveChat, loadChat, clearChat } from "./lib/memory";
 
 export const AVAILABLE_MODELS = {
   "gpt-4o": { provider: "openai", name: "GPT-4o", description: "Most capable OpenAI model" },
@@ -72,29 +75,139 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/chat/stream", async (req, res) => {
+    try {
+      const { messages, mode, model = "gpt-4o-mini" } = req.body;
+      
+      if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ error: "Messages array required" });
+      }
+
+      const modelConfig = AVAILABLE_MODELS[model as keyof typeof AVAILABLE_MODELS];
+      if (!modelConfig) {
+        return res.status(400).json({ error: "Invalid model selected" });
+      }
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      const stream = runAgentStream(
+        messages.map((m: any) => ({ role: m.role, content: m.content })),
+        mode === "hr" ? "hr" : "development",
+        model,
+        modelConfig.provider
+      );
+
+      for await (const event of stream) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+    } catch (error: any) {
+      console.error("Stream API error:", error?.message || error);
+      res.write(`data: ${JSON.stringify({ type: "error", data: error.message })}\n\n`);
+      res.end();
+    }
+  });
+
   app.get("/api/generated", (_req, res) => {
-    const fs = require("fs");
-    const path = require("path");
     const generatedPath = path.join(process.cwd(), "generated");
     
     if (!fs.existsSync(generatedPath)) {
-      return res.json({ projects: [] });
+      return res.json({ files: [] });
+    }
+    
+    function buildFileTree(dirPath: string, relativePath = ""): any[] {
+      try {
+        const items = fs.readdirSync(dirPath);
+        return items.map((name: string) => {
+          const itemPath = path.join(dirPath, name);
+          const relPath = relativePath ? `${relativePath}/${name}` : name;
+          const stat = fs.statSync(itemPath);
+          
+          if (stat.isDirectory()) {
+            return {
+              name,
+              type: "folder",
+              path: relPath,
+              children: buildFileTree(itemPath, relPath),
+              modifiedAt: stat.mtime
+            };
+          }
+          
+          return {
+            name,
+            type: "file",
+            path: relPath,
+            size: stat.size,
+            modifiedAt: stat.mtime
+          };
+        });
+      } catch {
+        return [];
+      }
+    }
+    
+    res.json({ files: buildFileTree(generatedPath) });
+  });
+  
+  app.get("/api/generated/file", (req, res) => {
+    const filePath = req.query.path as string;
+    
+    if (!filePath) {
+      return res.status(400).json({ error: "File path required" });
+    }
+    
+    const fullPath = path.join(process.cwd(), "generated", filePath);
+    const generatedDir = path.join(process.cwd(), "generated");
+    
+    if (!fullPath.startsWith(generatedDir)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: "File not found" });
     }
     
     try {
-      const items = fs.readdirSync(generatedPath);
-      const projects = items.map((name: string) => {
-        const itemPath = path.join(generatedPath, name);
-        const stat = fs.statSync(itemPath);
-        return {
-          name,
-          isDirectory: stat.isDirectory(),
-          createdAt: stat.birthtime
-        };
-      });
-      res.json({ projects });
-    } catch (error) {
-      res.json({ projects: [] });
+      const content = fs.readFileSync(fullPath, "utf-8");
+      const ext = path.extname(filePath).slice(1);
+      res.json({ content, path: filePath, extension: ext });
+    } catch {
+      res.status(500).json({ error: "Failed to read file" });
+    }
+  });
+  
+  app.get("/api/chat/history", async (req, res) => {
+    try {
+      const userId = (req.query.userId as string) || "default";
+      const history = await loadChat(userId);
+      res.json({ messages: history });
+    } catch {
+      res.json({ messages: [] });
+    }
+  });
+  
+  app.post("/api/chat/history", async (req, res) => {
+    try {
+      const { messages, userId = "default" } = req.body;
+      await saveChat(userId, messages || []);
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: "Failed to save history" });
+    }
+  });
+  
+  app.delete("/api/chat/history", async (req, res) => {
+    try {
+      const userId = (req.query.userId as string) || "default";
+      await clearChat(userId);
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: "Failed to clear history" });
     }
   });
 

@@ -445,3 +445,122 @@ export async function runAgent(
 
   return { content: finalContent, actions: executedActions };
 }
+
+export async function* runAgentStream(
+  messages: AgentMessage[],
+  mode: "development" | "hr",
+  model: string,
+  provider: string
+): AsyncGenerator<{ type: "token" | "tool_start" | "tool_end" | "done"; data: any }> {
+  const toolsContext = mode === "hr" ? HR_TOOLS_CONTEXT : DEV_TOOLS_CONTEXT;
+  const systemPrompt = DAN_SYSTEM_PROMPT + toolsContext;
+  
+  let llm: ChatOpenAI | ChatAnthropic;
+  
+  const openaiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  const openaiBase = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const anthropicKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+  const anthropicBase = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+  const openrouterKey = process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY;
+  const openrouterBase = process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL;
+  
+  if (provider === "openai") {
+    if (!openaiKey) throw new Error("OpenAI API key not configured");
+    llm = new ChatOpenAI({
+      model,
+      temperature: 0.85,
+      apiKey: openaiKey,
+      streaming: true,
+      configuration: { baseURL: openaiBase }
+    });
+  } else if (provider === "anthropic") {
+    if (!anthropicKey) throw new Error("Anthropic API key not configured");
+    llm = new ChatAnthropic({
+      model,
+      temperature: 0.85,
+      anthropicApiKey: anthropicKey,
+      anthropicApiUrl: anthropicBase,
+      streaming: true,
+    });
+  } else {
+    if (!openrouterKey) throw new Error("OpenRouter API key not configured");
+    llm = new ChatOpenAI({
+      model,
+      temperature: 0.85,
+      apiKey: openrouterKey,
+      streaming: true,
+      configuration: { baseURL: openrouterBase }
+    });
+  }
+
+  const activeTools = mode === "hr" ? hrTools : developmentTools;
+  const llmWithTools = llm.bindTools(activeTools);
+
+  const formattedMessages: any[] = [
+    new SystemMessage(systemPrompt),
+    ...messages.map(m => 
+      m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
+    )
+  ];
+
+  const executedActions: any[] = [];
+  let maxIterations = 5;
+  let iterations = 0;
+  let fullContent = "";
+
+  while (iterations < maxIterations) {
+    iterations++;
+    
+    let response: any = null;
+    let streamedContent = "";
+    
+    for await (const chunk of await llmWithTools.stream(formattedMessages)) {
+      if (chunk.content) {
+        const text = typeof chunk.content === "string" 
+          ? chunk.content 
+          : Array.isArray(chunk.content) 
+            ? chunk.content.map((c: any) => c.text || "").join("")
+            : "";
+        if (text) {
+          streamedContent += text;
+          yield { type: "token", data: text };
+        }
+      }
+      response = chunk;
+    }
+
+    fullContent = streamedContent;
+
+    if (!response?.tool_calls || response.tool_calls.length === 0) {
+      yield { type: "done", data: { content: fullContent, actions: executedActions } };
+      return;
+    }
+
+    formattedMessages.push(new AIMessage({ content: streamedContent, tool_calls: response.tool_calls }));
+
+    for (const toolCall of response.tool_calls) {
+      const tool = activeTools.find(t => t.name === toolCall.name);
+      
+      if (tool) {
+        yield { type: "tool_start", data: { name: toolCall.name, args: toolCall.args } };
+        
+        try {
+          const result = await tool.invoke(toolCall.args);
+          const parsedResult = JSON.parse(result);
+          
+          executedActions.push({ tool: toolCall.name, input: toolCall.args, output: parsedResult });
+          formattedMessages.push(new ToolMessage({ tool_call_id: toolCall.id || `call_${Date.now()}`, content: result }));
+          
+          yield { type: "tool_end", data: { name: toolCall.name, success: true, result: parsedResult } };
+        } catch (error: any) {
+          executedActions.push({ tool: toolCall.name, input: toolCall.args, error: error.message });
+          formattedMessages.push(new ToolMessage({ tool_call_id: toolCall.id || `call_${Date.now()}`, content: JSON.stringify({ success: false, error: error.message }) }));
+          
+          yield { type: "tool_end", data: { name: toolCall.name, success: false, error: error.message } };
+        }
+      }
+    }
+  }
+
+  yield { type: "done", data: { content: fullContent, actions: executedActions } };
+}
