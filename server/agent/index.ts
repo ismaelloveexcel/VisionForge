@@ -10,6 +10,7 @@ import { DAN_SYSTEM_PROMPT } from "../lib/system-prompt";
 import { DeployAppTool } from "../tools/deploy-tool";
 import { WriteFileTool } from "../tools/file-tool";
 import { ShellTool } from "../tools/shell-tool";
+import { LiveDeployTool } from "../tools/live-deploy-tool";
 
 const DEV_TOOLS_CONTEXT = `
 
@@ -282,6 +283,7 @@ class ReadFileTool extends StructuredTool {
 }
 
 const developmentTools = [
+  new LiveDeployTool(),
   new CreateFileTool(),
   new CreateProjectTool(),
   new CreateDiscordBotTool(),
